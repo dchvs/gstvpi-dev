@@ -1,5 +1,5 @@
-project('gst-vpi-plugin', ['c','cpp'],
-  version : '0.0.1',
+project('gst-vpi', 'c',
+  version : '0.1.0',
   meson_version : '>= 0.50',)
 
 project_name = meson.project_name()

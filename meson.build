@@ -49,7 +49,6 @@ if get_option('enable-profiling').enabled()
 endif
 
 # Define header directories
-#libgstvpiplugin_inc_dir = include_directories('libgstc')
 gstvpiplugin_inc_dir = include_directories('gst-libs/')
 configinc = include_directories('.')
 
@@ -59,8 +58,8 @@ c_args = ['-DHAVE_CONFIG_H']
 # Define installation directories
 
 lib_install_dir = get_option('libdir')
-plugins_install_dir = join_paths(get_option('libdir'), 'gstreamer-1.0')
-plugins_pkgconfig_install_dir = join_paths(get_option('libdir'), 'pkgconfig')
+plugins_install_dir = join_paths(lib_install_dir, 'gstreamer-1.0')
+pkgconfig_install_dir = join_paths(lib_install_dir, 'pkgconfig')
 
 # Internal installation directory
 plugin_dir = []

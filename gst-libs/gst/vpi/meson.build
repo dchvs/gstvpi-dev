@@ -8,7 +8,7 @@ gst_lib_headers = [
 ]
 
 # Build library
-gstvpifilter_lib = library('gstvpifilter-@0@'.format(api_version),
+gstvpifilter_lib = library('gstvpi-@0@'.format(api_version),
   gst_lib_sources,
   c_args : c_args,
   version : api_version,
@@ -19,6 +19,6 @@ gstvpifilter_lib = library('gstvpifilter-@0@'.format(api_version),
 
 plugin_dir = meson.current_build_dir()
 
-pkgconfig.generate(gstvpifilter_lib, install_dir : plugins_pkgconfig_install_dir)
+pkgconfig.generate(gstvpifilter_lib, install_dir : pkgconfig_install_dir)
 
 gstvpifilter_dep = declare_dependency(link_with : gstvpifilter_lib)

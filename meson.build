@@ -198,8 +198,8 @@ foreach h : check_headers
   endif
 endforeach
 
-# Gtk documentation
-gnome = import('gnome')
+# Hotdoc documentation
+hotdoc = import('hotdoc')
 
 # Imports pkgconfig module
 pkgconfig = import('pkgconfig')

@@ -17,8 +17,5 @@ gstvpifilter_lib = library('gstvpi-@0@'.format(api_version),
   dependencies : [plugin_deps],
 )
 
-plugin_dir = meson.current_build_dir()
-
 pkgconfig.generate(gstvpifilter_lib, install_dir : pkgconfig_install_dir)
-
 gstvpifilter_dep = declare_dependency(link_with : gstvpifilter_lib)

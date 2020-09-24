@@ -13,8 +13,8 @@
 #ifndef _GST_VPI_FILTER_H_
 #define _GST_VPI_FILTER_H_
 
-#include <gst/video/video.h>
 #include <gst/video/gstvideofilter.h>
+#include <gst/video/video.h>
 
 G_BEGIN_DECLS
 

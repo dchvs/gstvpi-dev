@@ -14,9 +14,6 @@
 #include "config.h"
 #endif
 
-#include <gst/gst.h>
-#include <gst/video/video.h>
-#include <gst/video/gstvideofilter.h>
 #include "gstvpifilter.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_filter_debug_category);

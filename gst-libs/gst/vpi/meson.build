@@ -17,5 +17,6 @@ gstvpifilter_lib = library('gstvpi-@0@'.format(api_version),
   dependencies : [plugin_deps],
 )
 
-pkgconfig.generate(gstvpifilter_lib, install_dir : pkgconfig_install_dir)
+pkgconfig.generate(gstvpifilter_lib, install_dir : pkgconfig_install_dir,
+  description : project_description)
 gstvpifilter_dep = declare_dependency(link_with : gstvpifilter_lib)

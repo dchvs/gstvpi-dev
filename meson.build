@@ -3,6 +3,7 @@ project('gst-vpi', 'c',
   meson_version : '>= 0.50',)
 
 project_name = meson.project_name()
+project_description = 'GStreamer wrapper for the NVIDIA VPI framework'
 project_version = meson.project_version()
 version_arr = project_version.split('.')
 version_major = version_arr[0].to_int()

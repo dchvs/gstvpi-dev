@@ -10,6 +10,13 @@
  *  back to RidgeRun without any encumbrance.
  */
 
-int main (int argc, char **argv) {
-    return 0;
+#include <gst/gst.h>
+
+int
+main (int argc, char **argv)
+{
+
+  gst_init (&argc, &argv);
+
+  return 0;
 }

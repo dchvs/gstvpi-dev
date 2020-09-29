@@ -206,7 +206,8 @@ foreach h : check_headers
 endforeach
 
 c_sources = [
-  'gst-libs/gst/vpi/gstvpifilter.c'
+  'gst-libs/gst/vpi/gstvpifilter.c',
+  'ext/vpi/gstvpiundistort.c'
 ]
 
 # Hotdoc documentation

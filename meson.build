@@ -214,8 +214,8 @@ c_sources = [
 if not get_option('enable-hotdoc').disabled()
   message('Hotdoc enabled: Building hotdoc documentation.')
   hotdoc = import('hotdoc')
-  hotdoc.generate_doc('gst-vpi',
-    project_version: '0.1.0',
+  hotdoc.generate_doc(project_name,
+    project_version: project_version,
     sitemap: 'docs/sitemap.txt',
     index: 'docs/index.md',
     c_sources: c_sources,

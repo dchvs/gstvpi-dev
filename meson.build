@@ -205,8 +205,26 @@ foreach h : check_headers
   endif
 endforeach
 
+c_sources = [
+  'gst-libs/gst/vpi/gstvpifilter.c',
+  'ext/vpi/gstvpiundistort.c'
+]
+
 # Hotdoc documentation
-hotdoc = import('hotdoc')
+if not get_option('enable-hotdoc').disabled()
+  message('Hotdoc enabled: Building hotdoc documentation.')
+  hotdoc = import('hotdoc')
+  hotdoc.generate_doc(project_name,
+    project_version: project_version,
+    sitemap: 'docs/sitemap.txt',
+    index: 'docs/index.md',
+    c_sources: c_sources,
+    c_smart_index: true,
+    languages: ['c'],
+    install: true,
+  )
+endif
+
 
 # Imports pkgconfig module
 pkgconfig = import('pkgconfig')

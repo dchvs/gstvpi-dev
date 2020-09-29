@@ -205,6 +205,10 @@ foreach h : check_headers
   endif
 endforeach
 
+c_sources = [
+  'gst-libs/gst/vpi/gstvpifilter.c'
+]
+
 # Hotdoc documentation
 if not get_option('enable-hotdoc').disabled()
   message('Hotdoc enabled: Building hotdoc documentation.')
@@ -213,7 +217,7 @@ if not get_option('enable-hotdoc').disabled()
     project_version: '0.1.0',
     sitemap: 'docs/sitemap.txt',
     index: 'docs/index.md',
-    c_sources: ['gst-libs/gst/vpi/gstvpifilter.c'],
+    c_sources: c_sources,
     c_smart_index: true,
     languages: ['c'],
     install: true,

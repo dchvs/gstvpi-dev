@@ -1,11 +1,13 @@
 # Define source code
 gst_plugin_sources = [
   'gstvpi.c',
-  'gstvpiundistort.c'
+  'gstvpiundistort.c',
+  'gstvpiupload.c'
 ]
 
 gst_plugin_headers = [
   'gstvpiundistort.h',
+  'gstvpiupload.h'
 ]
 
 # Build plugin library

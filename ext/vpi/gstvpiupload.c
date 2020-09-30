@@ -14,10 +14,15 @@
 #include "config.h"
 #endif
 
+#include <gst/video/video.h>
+
 #include "gstvpiupload.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category
+
+#define VIDEO_CAPS GST_VIDEO_CAPS_MAKE(GST_VIDEO_FORMATS_ALL)
+#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:VPIImage", GST_VIDEO_FORMATS_ALL)
 
 struct _GstVpiUpload
 {
@@ -33,18 +38,18 @@ enum
 };
 
 /* pad templates */
-static GstStaticPadTemplate gst_vpi_upload_src_template =
-GST_STATIC_PAD_TEMPLATE ("src",
+static GstStaticPadTemplate
+    gst_vpi_upload_src_template = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("application/unknown")
+    GST_STATIC_CAPS (VIDEO_AND_VPIIMAGE_CAPS)
     );
 
-static GstStaticPadTemplate gst_vpi_upload_sink_template =
-GST_STATIC_PAD_TEMPLATE ("sink",
+static GstStaticPadTemplate
+    gst_vpi_upload_sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("application/unknown")
+    GST_STATIC_CAPS (VIDEO_CAPS ";" VIDEO_AND_VPIIMAGE_CAPS)
     );
 
 /* class initialization */

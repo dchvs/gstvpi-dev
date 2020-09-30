@@ -14,11 +14,7 @@
 #include "config.h"
 #endif
 
-#include <gst/gst.h>
-#include <gst/video/video.h>
-
 #include "gstvpiupload.h"
-
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category
@@ -29,8 +25,6 @@ struct _GstVpiUpload
 };
 
 /* prototypes */
-static GstFlowReturn gst_vpi_upload_transform_ip (GstBaseTransform * trans,
-    GstBuffer * buf);
 static void gst_vpi_upload_finalize (GObject * object);
 
 enum
@@ -62,8 +56,6 @@ static void
 gst_vpi_upload_class_init (GstVpiUploadClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
-  GstBaseTransformClass *base_transform_class =
-      GST_BASE_TRANSFORM_CLASS (klass);
 
   gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
       &gst_vpi_upload_src_template);
@@ -74,24 +66,12 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
       "VPI Upload", "transition", "VPI memory interface element",
       "Andres Campos <andres.campos@ridgerun.com>");
 
-  base_transform_class->transform_ip =
-      GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_ip);
   gobject_class->finalize = gst_vpi_upload_finalize;
 }
 
 static void
 gst_vpi_upload_init (GstVpiUpload * vpi_upload)
 {
-}
-
-static GstFlowReturn
-gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
-{
-  GstVpiUpload *vpiupload = GST_VPI_UPLOAD (trans);
-
-  GST_DEBUG_OBJECT (vpiupload, "transform_ip");
-
-  return GST_FLOW_OK;
 }
 
 void

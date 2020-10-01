@@ -14,9 +14,9 @@
 #include "config.h"
 #endif
 
-#include <gst/video/video.h>
-
 #include "gstvpiupload.h"
+
+#include <gst/video/video.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category

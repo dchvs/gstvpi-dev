@@ -75,16 +75,16 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
 }
 
 static void
-gst_vpi_upload_init (GstVpiUpload * vpi_upload)
+gst_vpi_upload_init (GstVpiUpload * self)
 {
 }
 
 void
 gst_vpi_upload_finalize (GObject * object)
 {
-  GstVpiUpload *vpi_upload = GST_VPI_UPLOAD (object);
+  GstVpiUpload *self = GST_VPI_UPLOAD (object);
 
-  GST_DEBUG_OBJECT (vpi_upload, "finalize");
+  GST_DEBUG_OBJECT (self, "finalize");
 
   G_OBJECT_CLASS (gst_vpi_upload_parent_class)->finalize (object);
 }

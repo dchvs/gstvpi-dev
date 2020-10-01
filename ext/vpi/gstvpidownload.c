@@ -22,8 +22,8 @@
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_download_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_download_debug_category
 
-#define VIDEO_CAPS GST_VIDEO_CAPS_MAKE(GST_VIDEO_FORMATS_ALL)
-#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:VPIImage", GST_VIDEO_FORMATS_ALL)
+#define VIDEO_CAPS GST_VIDEO_CAPS_MAKE (GST_VIDEO_FORMATS_ALL)
+#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", GST_VIDEO_FORMATS_ALL)
 
 struct _GstVpiDownload
 {
@@ -66,7 +66,7 @@ gst_vpi_download_class_init (GstVpiDownloadClass * klass)
           gst_caps_from_string (VIDEO_AND_VPIIMAGE_CAPS)));
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
-      "VPI Download", "transition",
+      "VPI Download", "Filter/Video",
       "VPI converter element from VPIImage memory to host memory",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
@@ -76,16 +76,16 @@ gst_vpi_download_class_init (GstVpiDownloadClass * klass)
 }
 
 static void
-gst_vpi_download_init (GstVpiDownload * vpidownload)
+gst_vpi_download_init (GstVpiDownload * vpi_download)
 {
 }
 
 void
 gst_vpi_download_finalize (GObject * object)
 {
-  GstVpiDownload *vpidownload = GST_VPI_DOWNLOAD (object);
+  GstVpiDownload *vpi_download = GST_VPI_DOWNLOAD (object);
 
-  GST_DEBUG_OBJECT (vpidownload, "finalize");
+  GST_DEBUG_OBJECT (vpi_download, "finalize");
 
   G_OBJECT_CLASS (gst_vpi_download_parent_class)->finalize (object);
 }
@@ -109,22 +109,22 @@ gst_vpi_download_caps_downstream (GstBaseTransform * trans, GstCaps * caps_src)
 static GstCaps *
 gst_vpi_download_caps_upstream (GstBaseTransform * trans, GstCaps * caps_src)
 {
-  GstCaps *vpiimage = gst_caps_copy (caps_src);
-  GstCapsFeatures *vpiimage_feature =
+  GstCaps *vpi_image = gst_caps_copy (caps_src);
+  GstCapsFeatures *vpi_image_feature =
       gst_caps_features_from_string ("memory:VPIImage");
   gint i = 0;
 
   g_return_val_if_fail (trans, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  for (i = 0; i < gst_caps_get_size (vpiimage); ++i) {
+  for (i = 0; i < gst_caps_get_size (vpi_image); ++i) {
 
     /* Add VPIImage to all structures */
-    gst_caps_set_features (vpiimage, i,
-        gst_caps_features_copy (vpiimage_feature));
+    gst_caps_set_features (vpi_image, i,
+        gst_caps_features_copy (vpi_image_feature));
   }
 
-  return vpiimage;
+  return vpi_image;
 }
 
 static GstCaps *

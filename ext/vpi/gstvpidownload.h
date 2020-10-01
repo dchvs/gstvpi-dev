@@ -17,8 +17,8 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_VPI_DOWNLOAD   (gst_vpi_download_get_type())
-G_DECLARE_FINAL_TYPE(GstVpiDownload, gst_vpi_download, GST, VPI_DOWNLOAD, GstBaseTransform)
+#define GST_TYPE_VPI_DOWNLOAD (gst_vpi_download_get_type ())
+G_DECLARE_FINAL_TYPE (GstVpiDownload, gst_vpi_download, GST, VPI_DOWNLOAD, GstBaseTransform)
 
 G_END_DECLS
 

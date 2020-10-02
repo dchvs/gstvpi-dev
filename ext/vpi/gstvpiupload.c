@@ -29,9 +29,6 @@ struct _GstVpiUpload
   GstBaseTransform parent;
 };
 
-/* prototypes */
-static void gst_vpi_upload_finalize (GObject * object);
-
 enum
 {
   PROP_0
@@ -60,8 +57,6 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiUpload, gst_vpi_upload, GST_TYPE_BASE_TRANSFORM,
 static void
 gst_vpi_upload_class_init (GstVpiUploadClass * klass)
 {
-  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
-
   gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
       &gst_vpi_upload_src_template);
   gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
@@ -70,21 +65,9 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "VPI Upload", "Filter/Video", "Uploads data into Nvidia VPI",
       "Andres Campos <andres.campos@ridgerun.com>");
-
-  gobject_class->finalize = gst_vpi_upload_finalize;
 }
 
 static void
 gst_vpi_upload_init (GstVpiUpload * self)
 {
-}
-
-void
-gst_vpi_upload_finalize (GObject * object)
-{
-  GstVpiUpload *self = GST_VPI_UPLOAD (object);
-
-  GST_DEBUG_OBJECT (self, "finalize");
-
-  G_OBJECT_CLASS (gst_vpi_upload_parent_class)->finalize (object);
 }

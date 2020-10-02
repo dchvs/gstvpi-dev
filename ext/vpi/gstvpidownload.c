@@ -33,10 +33,10 @@ struct _GstVpiDownload
 /* prototypes */
 static GstCaps *gst_vpi_download_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
-static GstCaps *gst_vpi_download_transform_downstream_caps (GstBaseTransform *
-    trans, GstCaps * caps_src);
-static GstCaps *gst_vpi_download_transform_upstream_caps (GstBaseTransform *
-    trans, GstCaps * caps_src);
+static GstCaps *gst_vpi_download_transform_downstream_caps (GstVpiDownload *
+    self, GstCaps * caps_src);
+static GstCaps *gst_vpi_download_transform_upstream_caps (GstVpiDownload *
+    self, GstCaps * caps_src);
 
 enum
 {
@@ -78,12 +78,12 @@ gst_vpi_download_init (GstVpiDownload * self)
 }
 
 static GstCaps *
-gst_vpi_download_transform_downstream_caps (GstBaseTransform * trans,
+gst_vpi_download_transform_downstream_caps (GstVpiDownload * self,
     GstCaps * caps_src)
 {
   gint i = 0;
 
-  g_return_val_if_fail (trans, NULL);
+  g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
   /* All the result caps are Linux */
@@ -95,7 +95,7 @@ gst_vpi_download_transform_downstream_caps (GstBaseTransform * trans,
 }
 
 static GstCaps *
-gst_vpi_download_transform_upstream_caps (GstBaseTransform * trans,
+gst_vpi_download_transform_upstream_caps (GstVpiDownload * self,
     GstCaps * caps_src)
 {
   GstCaps *vpi_image = gst_caps_copy (caps_src);
@@ -103,7 +103,7 @@ gst_vpi_download_transform_upstream_caps (GstBaseTransform * trans,
       gst_caps_features_from_string ("memory:VPIImage");
   gint i = 0;
 
-  g_return_val_if_fail (trans, NULL);
+  g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
   for (i = 0; i < gst_caps_get_size (vpi_image); ++i) {
@@ -129,10 +129,14 @@ gst_vpi_download_transform_caps (GstBaseTransform * trans,
 
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */
-    result = gst_vpi_download_transform_upstream_caps (trans, given_caps);
+    result =
+        gst_vpi_download_transform_upstream_caps (GST_VPI_DOWNLOAD (trans),
+        given_caps);
   } else {
     /* transform caps going downstream */
-    result = gst_vpi_download_transform_downstream_caps (trans, given_caps);
+    result =
+        gst_vpi_download_transform_downstream_caps (GST_VPI_DOWNLOAD (trans),
+        given_caps);
   }
 
   if (filter) {

@@ -31,14 +31,14 @@ enum
 
 GST_START_TEST (test_success_negotiation)
 {
-  GstElement *pipeline;
-  GstElement *vpidownload;
+  GstElement *pipeline = NULL;
+  GstElement *vpidownload = NULL;
   GError *error = NULL;
-  GstPad *sink_pad;
-  GstPad *src_pad;
-  GstCaps *sink_caps;
-  GstCaps *src_caps;
-  GstCaps *src_caps_copy;
+  GstPad *sink_pad = NULL;
+  GstPad *src_pad = NULL;
+  GstCaps *sink_caps = NULL;
+  GstCaps *src_caps = NULL;
+  GstCaps *src_caps_copy = NULL;
 
   pipeline = gst_parse_launch (test_pipes[TEST_SUCCESS_NEGOTIATION], &error);
 
@@ -92,7 +92,7 @@ GST_END_TEST;
 static void
 fail_negotiation (const gchar * pipe_desc)
 {
-  GstElement *pipeline;
+  GstElement *pipeline = NULL;
   GError *error = NULL;
 
   pipeline = gst_parse_launch (pipe_desc, &error);

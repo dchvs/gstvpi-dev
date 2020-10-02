@@ -113,6 +113,8 @@ gst_vpi_download_transform_upstream_caps (GstVpiDownload * self,
         gst_caps_features_copy (vpi_image_feature));
   }
 
+  gst_caps_features_free (vpi_image_feature);
+
   return vpi_image;
 }
 

@@ -81,7 +81,7 @@ static GstCaps *
 gst_vpi_download_transform_downstream_caps (GstBaseTransform * trans,
     GstCaps * caps_src)
 {
-  gint i;
+  gint i = 0;
 
   g_return_val_if_fail (trans, NULL);
   g_return_val_if_fail (caps_src, NULL);
@@ -120,14 +120,12 @@ static GstCaps *
 gst_vpi_download_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter)
 {
-  GstCaps *given_caps;
+  GstCaps *given_caps = gst_caps_copy (caps);
   GstCaps *result = 0;
 
   GST_DEBUG_OBJECT (trans, "Transforming caps on %s:\ncaps: %"
       GST_PTR_FORMAT "\nfilter: %" GST_PTR_FORMAT,
       GST_PAD_SRC == direction ? "src" : "sink", caps, filter);
-
-  given_caps = gst_caps_copy (caps);
 
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */

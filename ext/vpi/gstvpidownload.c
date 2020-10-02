@@ -31,7 +31,6 @@ struct _GstVpiDownload
 };
 
 /* prototypes */
-static void gst_vpi_download_finalize (GObject * object);
 static GstCaps *gst_vpi_download_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static GstCaps *gst_vpi_download_transform_downstream_caps (GstBaseTransform *
@@ -54,7 +53,6 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiDownload, gst_vpi_download,
 static void
 gst_vpi_download_class_init (GstVpiDownloadClass * klass)
 {
-  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstBaseTransformClass *base_transform_class =
       GST_BASE_TRANSFORM_CLASS (klass);
 
@@ -70,7 +68,6 @@ gst_vpi_download_class_init (GstVpiDownloadClass * klass)
       "VPI converter element from VPIImage memory to host memory",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
-  gobject_class->finalize = gst_vpi_download_finalize;
   base_transform_class->transform_caps =
       GST_DEBUG_FUNCPTR (gst_vpi_download_transform_caps);
 }
@@ -78,16 +75,6 @@ gst_vpi_download_class_init (GstVpiDownloadClass * klass)
 static void
 gst_vpi_download_init (GstVpiDownload * self)
 {
-}
-
-void
-gst_vpi_download_finalize (GObject * object)
-{
-  GstVpiDownload *vpi_download = GST_VPI_DOWNLOAD (object);
-
-  GST_DEBUG_OBJECT (vpi_download, "finalize");
-
-  G_OBJECT_CLASS (gst_vpi_download_parent_class)->finalize (object);
 }
 
 static GstCaps *

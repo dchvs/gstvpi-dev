@@ -34,10 +34,10 @@ struct _GstVpiDownload
 static void gst_vpi_download_finalize (GObject * object);
 static GstCaps *gst_vpi_download_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
-static GstCaps *gst_vpi_download_caps_downstream (GstBaseTransform * trans,
-    GstCaps * caps_src);
-static GstCaps *gst_vpi_download_caps_upstream (GstBaseTransform * trans,
-    GstCaps * caps_src);
+static GstCaps *gst_vpi_download_transform_downstream_caps (GstBaseTransform *
+    trans, GstCaps * caps_src);
+static GstCaps *gst_vpi_download_transform_upstream_caps (GstBaseTransform *
+    trans, GstCaps * caps_src);
 
 enum
 {
@@ -76,7 +76,7 @@ gst_vpi_download_class_init (GstVpiDownloadClass * klass)
 }
 
 static void
-gst_vpi_download_init (GstVpiDownload * vpi_download)
+gst_vpi_download_init (GstVpiDownload * self)
 {
 }
 
@@ -91,7 +91,8 @@ gst_vpi_download_finalize (GObject * object)
 }
 
 static GstCaps *
-gst_vpi_download_caps_downstream (GstBaseTransform * trans, GstCaps * caps_src)
+gst_vpi_download_transform_downstream_caps (GstBaseTransform * trans,
+    GstCaps * caps_src)
 {
   gint i;
 
@@ -107,7 +108,8 @@ gst_vpi_download_caps_downstream (GstBaseTransform * trans, GstCaps * caps_src)
 }
 
 static GstCaps *
-gst_vpi_download_caps_upstream (GstBaseTransform * trans, GstCaps * caps_src)
+gst_vpi_download_transform_upstream_caps (GstBaseTransform * trans,
+    GstCaps * caps_src)
 {
   GstCaps *vpi_image = gst_caps_copy (caps_src);
   GstCapsFeatures *vpi_image_feature =
@@ -142,10 +144,10 @@ gst_vpi_download_transform_caps (GstBaseTransform * trans,
 
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */
-    result = gst_vpi_download_caps_upstream (trans, given_caps);
+    result = gst_vpi_download_transform_upstream_caps (trans, given_caps);
   } else {
     /* transform caps going downstream */
-    result = gst_vpi_download_caps_downstream (trans, given_caps);
+    result = gst_vpi_download_transform_downstream_caps (trans, given_caps);
   }
 
   if (filter) {

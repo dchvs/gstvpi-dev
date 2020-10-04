@@ -27,11 +27,15 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 struct _GstVpiUpload
 {
   GstBaseTransform parent;
+  GstVideoInfo out_caps_info;
+  GstVideoInfo in_caps_info;
 };
 
 /* prototypes */
 static GstCaps *gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
+static gboolean gst_vpi_upload_set_caps (GstBaseTransform * trans,
+    GstCaps * incaps, GstCaps * outcaps);
 
 enum
 {
@@ -75,6 +79,7 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
 
   base_transform_class->transform_caps =
       GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_caps);
+  base_transform_class->set_caps = GST_DEBUG_FUNCPTR (gst_vpi_upload_set_caps);
 }
 
 static void
@@ -154,4 +159,31 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
   GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, result);
 
   return result;
+}
+
+static gboolean
+gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
+    GstCaps * outcaps)
+{
+  GstVpiUpload *self = GST_VPI_UPLOAD (trans);
+  gboolean status = FALSE;
+
+  GST_INFO_OBJECT (self, "set_caps");
+
+  status = gst_video_info_from_caps (&self->in_caps_info, incaps);
+  if (!status) {
+    GST_ERROR ("Unable to get the input caps");
+    goto out;
+  }
+
+  status = gst_video_info_from_caps (&self->out_caps_info, outcaps);
+  if (!status) {
+    GST_ERROR ("Unable to get the output caps");
+    goto out;
+  }
+
+  status = TRUE;
+
+out:
+  return status;
 }

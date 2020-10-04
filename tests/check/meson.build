@@ -7,6 +7,7 @@ endif
 gst_tests = [
   ['elements/vpiundistort', false, [],  [] ],
   ['elements/vpidownload', false, [],  [] ],
+  ['elements/vpiupload', false, [],  [] ],
   ['libs/vpifilter', false, [],  [] ]
 ]
 

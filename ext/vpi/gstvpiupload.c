@@ -19,6 +19,7 @@
 #include <gst/video/video.h>
 
 #include "gst-libs/gst/vpi/gstcudabufferpool.h"
+#include "gst-libs/gst/vpi/gstcudameta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category
@@ -41,6 +42,8 @@ static gboolean gst_vpi_upload_set_caps (GstBaseTransform * trans,
     GstCaps * incaps, GstCaps * outcaps);
 static gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
     GstQuery * decide_query, GstQuery * query);
+static GstFlowReturn gst_vpi_upload_transform_ip (GstBaseTransform * trans,
+    GstBuffer * buf);
 static void gst_vpi_upload_finalize (GObject * object);
 
 enum
@@ -89,6 +92,8 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
   base_transform_class->set_caps = GST_DEBUG_FUNCPTR (gst_vpi_upload_set_caps);
   base_transform_class->propose_allocation =
       GST_DEBUG_FUNCPTR (gst_vpi_upload_propose_allocation);
+  base_transform_class->transform_ip =
+      GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_ip);
   gobject_class->finalize = gst_vpi_upload_finalize;
 }
 
@@ -249,6 +254,7 @@ gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
   gst_query_add_allocation_pool (query,
       GST_BUFFER_POOL (buffer_pool), size, 2, 0);
   gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
+  gst_query_add_allocation_meta (query, GST_CUDA_META_API_TYPE, NULL);
 
   ret = TRUE;
 
@@ -272,6 +278,29 @@ gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
       self->upstream_buffer_pool, query);
 
   return TRUE;
+}
+
+static GstFlowReturn
+gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
+{
+  GstVpiUpload *self = GST_VPI_UPLOAD (trans);
+  GstFlowReturn ret = GST_FLOW_OK;
+  GstMeta *meta = NULL;
+
+  GST_DEBUG_OBJECT (self, "transform_ip");
+
+  meta = gst_buffer_get_meta (buf, GST_CUDA_META_API_TYPE);
+  if (meta) {
+    GST_DEBUG_OBJECT (self, "Received buffer through proposed allocation.");
+  } else {
+    GST_ERROR_OBJECT (self,
+        "Cannot process buffers that do not use the proposed allocation.");
+    ret = GST_FLOW_ERROR;
+    goto out;
+  }
+
+out:
+  return ret;
 }
 
 void

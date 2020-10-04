@@ -18,6 +18,8 @@
 
 #include <gst/video/video.h>
 
+#include "gst-libs/gst/vpi/gstcudabufferpool.h"
+
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category
 
@@ -29,6 +31,7 @@ struct _GstVpiUpload
   GstBaseTransform parent;
   GstVideoInfo out_caps_info;
   GstVideoInfo in_caps_info;
+  GstCudaBufferPool *upstream_buffer_pool;
 };
 
 /* prototypes */
@@ -36,6 +39,9 @@ static GstCaps *gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static gboolean gst_vpi_upload_set_caps (GstBaseTransform * trans,
     GstCaps * incaps, GstCaps * outcaps);
+static gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
+    GstQuery * decide_query, GstQuery * query);
+static void gst_vpi_upload_finalize (GObject * object);
 
 enum
 {
@@ -65,6 +71,7 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiUpload, gst_vpi_upload, GST_TYPE_BASE_TRANSFORM,
 static void
 gst_vpi_upload_class_init (GstVpiUploadClass * klass)
 {
+  GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstBaseTransformClass *base_transform_class =
       GST_BASE_TRANSFORM_CLASS (klass);
 
@@ -80,11 +87,15 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
   base_transform_class->transform_caps =
       GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_caps);
   base_transform_class->set_caps = GST_DEBUG_FUNCPTR (gst_vpi_upload_set_caps);
+  base_transform_class->propose_allocation =
+      GST_DEBUG_FUNCPTR (gst_vpi_upload_propose_allocation);
+  gobject_class->finalize = gst_vpi_upload_finalize;
 }
 
 static void
 gst_vpi_upload_init (GstVpiUpload * self)
 {
+  self->upstream_buffer_pool = NULL;
 }
 
 static GstCaps *
@@ -186,4 +197,91 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
 
 out:
   return status;
+}
+
+static gsize
+gst_cuda_base_filter_compute_size (GstVpiUpload * self, GstVideoInfo * info)
+{
+  gsize size = 0;
+
+  g_return_val_if_fail (self, 0);
+  g_return_val_if_fail (info, 0);
+
+  if (info->size) {
+    size = info->size;
+  } else {
+    size = (info->stride[0] * info->height) +
+        (info->stride[1] * info->height / 2) +
+        (info->stride[2] * info->height / 2);
+  }
+
+  GST_LOG_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, size);
+
+  return size;
+}
+
+static gboolean
+gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
+    GstCudaBufferPool * buffer_pool, GstQuery * query)
+{
+  gsize size = 0;
+  GstStructure *config = NULL;
+  GstBufferPool *pool = NULL;
+  GstCaps *caps = NULL;
+  gboolean need_pool = FALSE;
+  gboolean ret = FALSE;
+
+  GST_INFO_OBJECT (self, "Proposing VPI upstream_buffer_pool");
+
+  gst_query_parse_allocation (query, &caps, &need_pool);
+
+  pool = GST_BUFFER_POOL (buffer_pool);
+  size = gst_cuda_base_filter_compute_size (self, &self->in_caps_info);
+
+  config = gst_buffer_pool_get_config (pool);
+  gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
+
+  if (!gst_buffer_pool_set_config (pool, config)) {
+    GST_ERROR_OBJECT (self, "Unable to set pool configuration");
+    goto out;
+  }
+
+  gst_query_add_allocation_pool (query,
+      GST_BUFFER_POOL (buffer_pool), size, 2, 0);
+  gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
+
+  ret = TRUE;
+
+out:
+  return ret;
+}
+
+/* propose allocation query parameters for input buffers */
+static gboolean
+gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
+    GstQuery * decide_query, GstQuery * query)
+{
+  GstVpiUpload *self = GST_VPI_UPLOAD (trans);
+
+  GST_DEBUG_OBJECT (self, "Proposing upstream allocation");
+  if (!self->upstream_buffer_pool) {
+    self->upstream_buffer_pool = g_object_new (GST_CUDA_TYPE_BUFFER_POOL, NULL);
+  }
+
+  return gst_vpi_upload_create_buffer_pool (self,
+      self->upstream_buffer_pool, query);
+
+  return TRUE;
+}
+
+void
+gst_vpi_upload_finalize (GObject * object)
+{
+  GstVpiUpload *self = GST_VPI_UPLOAD (object);
+
+  GST_DEBUG_OBJECT (self, "finalize");
+
+  g_clear_object (&self->upstream_buffer_pool);
+
+  G_OBJECT_CLASS (gst_vpi_upload_parent_class)->finalize (object);
 }

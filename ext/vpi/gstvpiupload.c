@@ -29,6 +29,10 @@ struct _GstVpiUpload
   GstBaseTransform parent;
 };
 
+/* prototypes */
+static GstCaps *gst_vpi_upload_transform_caps (GstBaseTransform * trans,
+    GstPadDirection direction, GstCaps * caps, GstCaps * filter);
+
 enum
 {
   PROP_0
@@ -57,6 +61,9 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiUpload, gst_vpi_upload, GST_TYPE_BASE_TRANSFORM,
 static void
 gst_vpi_upload_class_init (GstVpiUploadClass * klass)
 {
+  GstBaseTransformClass *base_transform_class =
+      GST_BASE_TRANSFORM_CLASS (klass);
+
   gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
       &gst_vpi_upload_src_template);
   gst_element_class_add_static_pad_template (GST_ELEMENT_CLASS (klass),
@@ -65,9 +72,86 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "VPI Upload", "Filter/Video", "Uploads data into NVIDIA VPI",
       "Andres Campos <andres.campos@ridgerun.com>");
+
+  base_transform_class->transform_caps =
+      GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_caps);
 }
 
 static void
 gst_vpi_upload_init (GstVpiUpload * self)
 {
+}
+
+static GstCaps *
+gst_vpi_download_transform_downstream_caps (GstVpiUpload * self,
+    GstCaps * caps_src)
+{
+  GstCaps *vpiimage = gst_caps_copy (caps_src);
+  GstCapsFeatures *vpiimage_feature =
+      gst_caps_features_from_string ("memory:VPIImage");
+  gint i = 0;
+
+  g_return_val_if_fail (self, NULL);
+  g_return_val_if_fail (caps_src, NULL);
+
+  for (i = 0; i < gst_caps_get_size (vpiimage); ++i) {
+
+    /* Add VPIImage to all structures */
+    gst_caps_set_features (vpiimage, i,
+        gst_caps_features_copy (vpiimage_feature));
+  }
+
+  gst_caps_features_free (vpiimage_feature);
+
+  return vpiimage;
+}
+
+static GstCaps *
+gst_vpi_download_transform_upstream_caps (GstVpiUpload * self,
+    GstCaps * caps_src)
+{
+  gint i = 0;
+
+  g_return_val_if_fail (self, NULL);
+  g_return_val_if_fail (caps_src, NULL);
+
+  /* All the result caps are Linux */
+  for (i = 0; i < gst_caps_get_size (caps_src); i++) {
+    gst_caps_set_features (caps_src, i, NULL);
+  }
+
+  return caps_src;
+}
+
+static GstCaps *
+gst_vpi_upload_transform_caps (GstBaseTransform * trans,
+    GstPadDirection direction, GstCaps * caps, GstCaps * filter)
+{
+  GstVpiUpload *self = GST_VPI_UPLOAD (trans);
+  GstCaps *given_caps = NULL;
+  GstCaps *result = 0;
+
+  GST_DEBUG_OBJECT (self, "Transforming caps on %s:\ncaps: %"
+      GST_PTR_FORMAT "\nfilter: %" GST_PTR_FORMAT,
+      GST_PAD_SRC == direction ? "src" : "sink", caps, filter);
+
+  given_caps = gst_caps_copy (caps);
+
+  if (direction == GST_PAD_SRC) {
+    /* transform caps going upstream */
+    result = gst_vpi_download_transform_upstream_caps (self, given_caps);
+  } else {
+    /* transform caps going downstream */
+    result = gst_vpi_download_transform_downstream_caps (self, given_caps);
+  }
+
+  if (filter) {
+    GstCaps *tmp = result;
+    result = gst_caps_intersect (filter, result);
+    gst_caps_unref (tmp);
+  }
+
+  GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, result);
+
+  return result;
 }

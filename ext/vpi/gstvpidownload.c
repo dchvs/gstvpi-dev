@@ -106,7 +106,7 @@ gst_vpi_download_transform_upstream_caps (GstVpiDownload * self,
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  for (i = 0; i < gst_caps_get_size (vpi_image); ++i) {
+  for (i = 0; i < gst_caps_get_size (vpi_image); i++) {
 
     /* Add VPIImage to all structures */
     gst_caps_set_features (vpi_image, i,
@@ -123,7 +123,7 @@ gst_vpi_download_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter)
 {
   GstCaps *given_caps = gst_caps_copy (caps);
-  GstCaps *result = 0;
+  GstCaps *result = NULL;
 
   GST_DEBUG_OBJECT (trans, "Transforming caps on %s:\ncaps: %"
       GST_PTR_FORMAT "\nfilter: %" GST_PTR_FORMAT,

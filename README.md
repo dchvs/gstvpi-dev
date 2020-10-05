@@ -1,13 +1,13 @@
-# Gst-VPI
+# GstVPI
 
 >See the 
-**[Gst-VPI wiki](https://developer.ridgerun.com/wiki/index.php?title=GstVPI)** 
+**[GstVPI wiki](https://developer.ridgerun.com/wiki/index.php?title=GstVPI)** 
 for the complete documentation.
 
-Gst-VPI is a project from Ridgerun Engineering that provides a framework for 
+GstVPI is a project from Ridgerun Engineering that provides a framework for 
 integrating the NVIDIA Vision Programming Interface into GStreamer.
 
-## Installing Gst-VPI
+## Installing GstVPI
 
 <div style="color:gray">
     <img src="https://developer.ridgerun.com/wiki/images/2/2c/Underconstruction.png">

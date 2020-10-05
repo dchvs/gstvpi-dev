@@ -125,8 +125,8 @@ gst_vpi_download_transform_caps (GstBaseTransform * trans,
   GstCaps *given_caps = gst_caps_copy (caps);
   GstCaps *result = NULL;
 
-  GST_DEBUG_OBJECT (trans, "Transforming caps on %s:\ncaps: %"
-      GST_PTR_FORMAT "\nfilter: %" GST_PTR_FORMAT,
+  GST_DEBUG_OBJECT (trans, "Transforming caps on %s:caps: %"
+      GST_PTR_FORMAT "filter: %" GST_PTR_FORMAT,
       GST_PAD_SRC == direction ? "src" : "sink", caps, filter);
 
   if (direction == GST_PAD_SRC) {

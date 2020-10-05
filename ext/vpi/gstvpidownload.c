@@ -134,11 +134,16 @@ gst_vpi_download_transform_caps (GstBaseTransform * trans,
     result =
         gst_vpi_download_transform_upstream_caps (GST_VPI_DOWNLOAD (trans),
         given_caps);
-  } else {
+  } else if (direction == GST_PAD_SINK) {
     /* transform caps going downstream */
     result =
         gst_vpi_download_transform_downstream_caps (GST_VPI_DOWNLOAD (trans),
         given_caps);
+  } else {
+    /* unknown direction */
+    GST_ERROR_OBJECT (trans,
+        "Cannot transform caps of unknown GstPadDirection");
+    goto out;
   }
 
   if (filter) {
@@ -147,6 +152,7 @@ gst_vpi_download_transform_caps (GstBaseTransform * trans,
     gst_caps_unref (tmp);
   }
 
+out:
   GST_DEBUG_OBJECT (trans, "Transformed caps: %" GST_PTR_FORMAT, result);
 
   return result;

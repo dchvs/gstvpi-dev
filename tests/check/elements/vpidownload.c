@@ -24,9 +24,9 @@ enum
 {
   /* test names */
   TEST_SUCCESS_NEGOTIATION,
-  TEST_FAIL_NEGOTIATION_SINK,
-  TEST_FAIL_NEGOTIATION_SRC,
-  TEST_FAIL_NEGOTIATION_WIDTH_HEIGHT
+  TEST_FAIL_PAD_COMPATIBILITY_SINK,
+  TEST_FAIL_PAD_COMPATIBILITY_SRC,
+  TEST_FAIL_PAD_COMPATIBILITY_WIDTH_HEIGHT
 };
 
 GST_START_TEST (test_success_negotiation)
@@ -90,36 +90,36 @@ GST_START_TEST (test_success_negotiation)
 GST_END_TEST;
 
 static void
-fail_negotiation (const gchar * pipe_desc)
+fail_pad_compatibility (const gchar * pipe_desc)
 {
   GstElement *pipeline = NULL;
   GError *error = NULL;
 
   pipeline = gst_parse_launch (pipe_desc, &error);
 
-  /* Pipeline creation should fail due to negotation error */
+  /* Pipeline creation should fail due to compatibility error */
   fail_if (g_strrstr (error->message, "could not link") == NULL, error);
 
   gst_object_unref (pipeline);
 }
 
-GST_START_TEST (test_fail_negotiation_sink)
+GST_START_TEST (test_fail_pad_compatibility_sink)
 {
-  fail_negotiation (test_pipes[TEST_FAIL_NEGOTIATION_SINK]);
+  fail_pad_compatibility (test_pipes[TEST_FAIL_PAD_COMPATIBILITY_SINK]);
 }
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_negotiation_src)
+GST_START_TEST (test_fail_pad_compatibility_src)
 {
-  fail_negotiation (test_pipes[TEST_FAIL_NEGOTIATION_SRC]);
+  fail_pad_compatibility (test_pipes[TEST_FAIL_PAD_COMPATIBILITY_SRC]);
 }
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_negotiation_width_height)
+GST_START_TEST (test_fail_pad_compatibility_width_height)
 {
-  fail_negotiation (test_pipes[TEST_FAIL_NEGOTIATION_WIDTH_HEIGHT]);
+  fail_pad_compatibility (test_pipes[TEST_FAIL_PAD_COMPATIBILITY_WIDTH_HEIGHT]);
 }
 
 GST_END_TEST;
@@ -132,9 +132,9 @@ gst_vpi_download_suite (void)
 
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_success_negotiation);
-  tcase_add_test (tc, test_fail_negotiation_sink);
-  tcase_add_test (tc, test_fail_negotiation_src);
-  tcase_add_test (tc, test_fail_negotiation_width_height);
+  tcase_add_test (tc, test_fail_pad_compatibility_sink);
+  tcase_add_test (tc, test_fail_pad_compatibility_src);
+  tcase_add_test (tc, test_fail_pad_compatibility_width_height);
 
   return suite;
 }

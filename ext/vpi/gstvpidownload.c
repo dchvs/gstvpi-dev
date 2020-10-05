@@ -98,13 +98,15 @@ static GstCaps *
 gst_vpi_download_transform_upstream_caps (GstVpiDownload * self,
     GstCaps * caps_src)
 {
-  GstCaps *vpi_image = gst_caps_copy (caps_src);
-  GstCapsFeatures *vpi_image_feature =
-      gst_caps_features_from_string ("memory:VPIImage");
+  GstCaps *vpi_image = NULL;
+  GstCapsFeatures *vpi_image_feature = NULL;
   gint i = 0;
 
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
+
+  vpi_image = gst_caps_copy (caps_src);
+  vpi_image_feature = gst_caps_features_from_string ("memory:VPIImage");
 
   for (i = 0; i < gst_caps_get_size (vpi_image); i++) {
 

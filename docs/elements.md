@@ -1,5 +1,5 @@
 ---
-short-description: gst-vpi elements
+short-description: GstVPI elements
 ...
 
-# gst-vpi elements
+# GstVPI elements

@@ -29,6 +29,8 @@ struct _GstVpiUndistort
 };
 
 /* prototypes */
+static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter * filter,
+    VPIImage * in_image, VPIImage * out_image);
 static void gst_vpi_undistort_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_undistort_get_property (GObject * object,
@@ -51,6 +53,7 @@ static void
 gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_CLASS (klass);
 
   gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
@@ -63,6 +66,8 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
       "VPI Undistort", "filter", "VPI based camera lens undistort element.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
+  vpi_filter_class->transform_image =
+      GST_DEBUG_FUNCPTR (gst_vpi_undistort_transform_image);
   gobject_class->set_property = gst_vpi_undistort_set_property;
   gobject_class->get_property = gst_vpi_undistort_get_property;
   gobject_class->finalize = gst_vpi_undistort_finalize;
@@ -71,6 +76,20 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
 static void
 gst_vpi_undistort_init (GstVpiUndistort * vpi_undistort)
 {
+}
+
+static GstFlowReturn
+gst_vpi_undistort_transform_image (GstVpiFilter * filter,
+    VPIImage * in_image, VPIImage * out_image)
+{
+  GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
+  GstFlowReturn ret = GST_FLOW_OK;
+
+  GST_DEBUG_OBJECT (self, "Transform image");
+
+  /* Call to undistort function */
+
+  return ret;
 }
 
 void

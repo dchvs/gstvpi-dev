@@ -79,13 +79,17 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiFilter *self = GST_VPI_FILTER (filter);
   GstFlowReturn ret = GST_FLOW_ERROR;
   GstMeta *meta = NULL;
+  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  VPIImage in_image;
+  VPIImage out_image;
 
   GST_DEBUG_OBJECT (filter, "Transform frame");
 
   meta = gst_buffer_get_meta (inframe->buffer, GST_CUDA_META_API_TYPE);
   if (meta) {
     GST_DEBUG_OBJECT (self, "Received buffer with CUDA meta");
-    ret = GST_FLOW_OK;
+
+    ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
   } else {
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not contain the CUDA meta");

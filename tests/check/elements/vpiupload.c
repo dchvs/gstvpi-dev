@@ -25,8 +25,8 @@ enum
   /* test names */
   TEST_SUCCESS_POOL_NEGOTIATION,
   TEST_FAIL_POOL_NEGOTIATION,
-  TEST_FAIL_CAPS_NEGOTIATION_SRC,
-  TEST_FAIL_CAPS_NEGOTIATION_WIDTH_HEIGHT
+  TEST_FAIL_CAPS_COMPATIBILITY_SRC,
+  TEST_FAIL_CAPS_COMPATIBILITY_WIDTH_HEIGHT
 };
 
 GST_START_TEST (test_success_pool_negotiation)
@@ -117,7 +117,7 @@ GST_START_TEST (test_fail_pool_negotiation)
 GST_END_TEST;
 
 static void
-fail_caps_negotiation (const gchar * pipe_desc)
+fail_caps_compatibility (const gchar * pipe_desc)
 {
   GstElement *pipeline = NULL;
   GError *error = NULL;
@@ -130,16 +130,17 @@ fail_caps_negotiation (const gchar * pipe_desc)
   gst_object_unref (pipeline);
 }
 
-GST_START_TEST (test_fail_caps_negotiation_src)
+GST_START_TEST (test_fail_caps_compatibility_src)
 {
-  fail_caps_negotiation (test_pipes[TEST_FAIL_CAPS_NEGOTIATION_SRC]);
+  fail_caps_compatibility (test_pipes[TEST_FAIL_CAPS_COMPATIBILITY_SRC]);
 }
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_caps_negotiation_width_height)
+GST_START_TEST (test_fail_caps_compatibility_width_height)
 {
-  fail_caps_negotiation (test_pipes[TEST_FAIL_CAPS_NEGOTIATION_WIDTH_HEIGHT]);
+  fail_caps_compatibility (test_pipes
+      [TEST_FAIL_CAPS_COMPATIBILITY_WIDTH_HEIGHT]);
 }
 
 GST_END_TEST;
@@ -153,8 +154,8 @@ gst_vpi_upload_suite (void)
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_success_pool_negotiation);
   tcase_add_test (tc, test_fail_pool_negotiation);
-  tcase_add_test (tc, test_fail_caps_negotiation_src);
-  tcase_add_test (tc, test_fail_caps_negotiation_width_height);
+  tcase_add_test (tc, test_fail_caps_compatibility_src);
+  tcase_add_test (tc, test_fail_caps_compatibility_width_height);
 
   return suite;
 }

@@ -107,13 +107,15 @@ static GstCaps *
 gst_vpi_download_transform_downstream_caps (GstVpiUpload * self,
     GstCaps * caps_src)
 {
-  GstCaps *vpiimage = gst_caps_copy (caps_src);
-  GstCapsFeatures *vpiimage_feature =
-      gst_caps_features_from_string ("memory:VPIImage");
+  GstCaps *vpiimage = NULL;
+  GstCapsFeatures *vpiimage_feature = NULL;
   gint i = 0;
 
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
+
+  vpiimage = gst_caps_copy (caps_src);
+  vpiimage_feature = gst_caps_features_from_string ("memory:VPIImage");
 
   for (i = 0; i < gst_caps_get_size (vpiimage); ++i) {
 
@@ -150,7 +152,7 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
   GstCaps *given_caps = NULL;
-  GstCaps *result = 0;
+  GstCaps *result = NULL;
 
   GST_DEBUG_OBJECT (self, "Transforming caps on %s:\ncaps: %"
       GST_PTR_FORMAT "\nfilter: %" GST_PTR_FORMAT,

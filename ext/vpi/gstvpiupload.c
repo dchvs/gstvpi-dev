@@ -63,7 +63,7 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
       &gst_vpi_upload_sink_template);
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
-      "VPI Upload", "Filter/Video", "Uploads data into Nvidia VPI",
+      "VPI Upload", "Filter/Video", "Uploads data into NVIDIA VPI",
       "Andres Campos <andres.campos@ridgerun.com>");
 }
 

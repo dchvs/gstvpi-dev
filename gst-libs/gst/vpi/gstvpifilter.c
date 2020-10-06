@@ -29,6 +29,8 @@ struct _GstVpiFilterPrivate
   GstCudaBufferPool *downstream_buffer_pool;
 };
 
+static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
+    GstVideoFrame * inframe, GstVideoFrame * outframe);
 static void gst_vpi_filter_finalize (GObject * object);
 static gboolean gst_vpi_filter_decide_allocation (GstBaseTransform * trans,
     GstQuery * query);
@@ -49,9 +51,12 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstBaseTransformClass *base_transform_class =
       GST_BASE_TRANSFORM_CLASS (klass);
+  GstVideoFilterClass *video_filter_class = GST_VIDEO_FILTER_CLASS (klass);
 
   g_type_class_add_private (gobject_class, sizeof (GstVpiFilterPrivate));
 
+  video_filter_class->transform_frame =
+      GST_DEBUG_FUNCPTR (gst_vpi_filter_transform_frame);
   base_transform_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_decide_allocation);
   gobject_class->finalize = gst_vpi_filter_finalize;
@@ -65,6 +70,30 @@ gst_vpi_filter_init (GstVpiFilter * self)
       GstVpiFilterPrivate);
 
   priv->downstream_buffer_pool = NULL;
+}
+
+static GstFlowReturn
+gst_vpi_filter_transform_frame (GstVideoFilter * filter,
+    GstVideoFrame * inframe, GstVideoFrame * outframe)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (filter);
+  GstFlowReturn ret = GST_FLOW_ERROR;
+  GstMeta *meta = NULL;
+
+  GST_DEBUG_OBJECT (filter, "Transform frame");
+
+  meta = gst_buffer_get_meta (inframe->buffer, GST_CUDA_META_API_TYPE);
+  if (meta) {
+    GST_DEBUG_OBJECT (self, "Received buffer with CUDA meta");
+    ret = GST_FLOW_OK;
+  } else {
+    GST_ERROR_OBJECT (self,
+        "Cannot process buffers that do not contain the CUDA meta");
+    goto out;
+  }
+
+out:
+  return ret;
 }
 
 static gsize
@@ -101,7 +130,7 @@ gst_vpi_filter_create_buffer_pool (GstVpiFilter * self,
   gboolean need_pool = FALSE;
   gboolean ret = FALSE;
 
-  GST_INFO_OBJECT (self, "Creating buffer pool");
+  GST_INFO_OBJECT (self, "Creating downstream buffer pool");
 
   gst_query_parse_allocation (query, &caps, &need_pool);
 
@@ -135,6 +164,8 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
       GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
   gint npool = 0;
 
+  GST_INFO_OBJECT (self, "Deciding allocation");
+
   if (!priv->downstream_buffer_pool) {
     priv->downstream_buffer_pool =
         g_object_new (GST_CUDA_TYPE_BUFFER_POOL, NULL);
@@ -162,7 +193,7 @@ gst_vpi_filter_finalize (GObject * object)
   GstVpiFilterPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (object,
       GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
 
-  GST_DEBUG_OBJECT (object, "Finalize VPI filter");
+  GST_INFO_OBJECT (object, "Finalize VPI filter");
 
   g_clear_object (&priv->downstream_buffer_pool);
 

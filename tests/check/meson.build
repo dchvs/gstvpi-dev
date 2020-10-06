@@ -1,3 +1,8 @@
+valgrind_dep = dependency('valgrind', required: false).partial_dependency(compile_args : true)
+if valgrind_dep.found()
+  cdata.set('HAVE_VALGRIND', 1)
+endif
+
 # Name, condition when to skip the test, extra dependencies and extra files
 gst_tests = [
   ['elements/vpiundistort', false, [],  [] ],
@@ -6,19 +11,24 @@ gst_tests = [
 
 # Add C Definitions for tests
 test_defines = [
-  '-Ddefine="definename"',
+  '-UG_DISABLE_ASSERT',
+  '-UG_DISABLE_CAST_CHECKS',
+  '-DGST_CHECK_TEST_ENVIRONMENT_BEACON="GST_PLUGIN_LOADING_WHITELIST"',
+  '-DGST_USE_UNSTABLE_API',
 ]
 
 # Define plugins path
 plugins_dir = gst_dep.get_pkgconfig_variable('pluginsdir')
 
-# Create environment object to  stores information about the environment
+# Create environment object to store information about the environment
 # variables set during tests.
 # Define constant enviroment variable
 env = environment()
 env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
 env.set('CK_DEFAULT_TIMEOUT', '120')
-env.set('GST_PLUGIN_PATH_1_0', plugins_dir)
+env.set('GST_PLUGIN_LOADING_WHITELIST', 'gstreamer', 'gst-plugins-base',
+        'gst-vpi@' + meson.build_root())
+env.set('GST_PLUGIN_PATH_1_0', [meson.build_root()] + [plugins_dir])
 
 # Build and run tests
 foreach t : gst_tests

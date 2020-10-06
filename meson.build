@@ -36,7 +36,7 @@ example_deps = [gst_dep, gst_base_dep]
 test_deps=[gst_dep, gst_base_dep, gst_check_dep]
 
 # Verify if profiling was enabled
-if get_option('enable-profiling').enabled()
+if get_option('profiling').enabled()
   profiler_dep = dependency('libprofiler')
   if(profiler_dep.found())
     message('Profiling enabled: Building examples with profiling support.')
@@ -211,7 +211,7 @@ c_sources = [
 ]
 
 # Hotdoc documentation
-if not get_option('enable-hotdoc').disabled()
+if not get_option('doc').disabled()
   message('Hotdoc enabled: Building hotdoc documentation.')
   hotdoc = import('hotdoc')
   hotdoc.generate_doc(project_name,

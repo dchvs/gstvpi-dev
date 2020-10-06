@@ -1,11 +1,11 @@
-# Feature options
-option('enable-tests', type : 'feature', value : 'auto', yield : true, description : 'Build tests')
-option('enable-examples', type : 'feature', value : 'auto', yield : true, description : 'Build examples')
-option('enable-hotdoc', type : 'feature', value : 'auto', yield : true, description : 'Enable documentation')
-option('enable-profiling', type : 'feature', value : 'disabled', yield : true, description: 'Enable profiling building')
+# Common feature options
+option('tests', type : 'feature', value : 'auto', yield : true, description : 'Build tests')
+option('examples', type : 'feature', value : 'auto', yield : true, description : 'Build examples')
+option('profiling', type : 'feature', value : 'auto', yield : true, description: 'Enable profiling building')
 
 # Common options
 option('package-name', type : 'string', yield : true,
        description : 'Package name to use in plugins')
 option('package-origin', type : 'string', value : 'Unknown package origin', yield : true,
        description : 'Package origin URL to use in plugins')
+option('doc', type : 'feature', value : 'auto', yield : true, description : 'Enable documentation')

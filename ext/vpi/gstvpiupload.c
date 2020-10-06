@@ -117,7 +117,7 @@ gst_vpi_download_transform_downstream_caps (GstVpiUpload * self,
   vpiimage = gst_caps_copy (caps_src);
   vpiimage_feature = gst_caps_features_from_string ("memory:VPIImage");
 
-  for (i = 0; i < gst_caps_get_size (vpiimage); ++i) {
+  for (i = 0; i < gst_caps_get_size (vpiimage); i++) {
 
     /* Add VPIImage to all structures */
     gst_caps_set_features (vpiimage, i,
@@ -154,8 +154,8 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
   GstCaps *given_caps = NULL;
   GstCaps *result = NULL;
 
-  GST_DEBUG_OBJECT (self, "Transforming caps on %s:\ncaps: %"
-      GST_PTR_FORMAT "\nfilter: %" GST_PTR_FORMAT,
+  GST_DEBUG_OBJECT (self, "Transforming caps on %s:caps: %"
+      GST_PTR_FORMAT "filter: %" GST_PTR_FORMAT,
       GST_PAD_SRC == direction ? "src" : "sink", caps, filter);
 
   given_caps = gst_caps_copy (caps);
@@ -163,9 +163,14 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */
     result = gst_vpi_download_transform_upstream_caps (self, given_caps);
-  } else {
+  } else if (direction == GST_PAD_SINK) {
     /* transform caps going downstream */
     result = gst_vpi_download_transform_downstream_caps (self, given_caps);
+  } else {
+    /* unknown direction */
+    GST_ERROR_OBJECT (trans,
+        "Cannot transform caps of unknown GstPadDirection");
+    goto out;
   }
 
   if (filter) {
@@ -174,6 +179,7 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     gst_caps_unref (tmp);
   }
 
+out:
   GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, result);
 
   return result;

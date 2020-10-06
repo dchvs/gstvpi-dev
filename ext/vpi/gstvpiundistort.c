@@ -21,6 +21,8 @@
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_undistort_debug_category
 
+#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", GST_VIDEO_FORMATS_ALL)
+
 struct _GstVpiUndistort
 {
   GstVpiFilter parent;
@@ -38,32 +40,26 @@ enum
   PROP_0
 };
 
-/* pad templates */
-#define VIDEO_SRC_CAPS \
-    GST_VIDEO_CAPS_MAKE("{ I420, RGBA }")
-
-#define VIDEO_SINK_CAPS \
-    GST_VIDEO_CAPS_MAKE("{ I420, RGBA }")
-
 /* class initialization */
 
-G_DEFINE_TYPE_WITH_CODE (GstVpiUndistort, gst_vpi_undistort, GST_TYPE_VPI_FILTER,
-  GST_DEBUG_CATEGORY_INIT (gst_vpi_undistort_debug_category, "vpiundistort", 0,
-  "debug category for vpiundistort element"));
+G_DEFINE_TYPE_WITH_CODE (GstVpiUndistort, gst_vpi_undistort,
+    GST_TYPE_VPI_FILTER,
+    GST_DEBUG_CATEGORY_INIT (gst_vpi_undistort_debug_category, "vpiundistort",
+        0, "debug category for vpiundistort element"));
 
 static void
 gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS(klass),
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-        gst_caps_from_string (VIDEO_SRC_CAPS)));
-  gst_element_class_add_pad_template (GST_ELEMENT_CLASS(klass),
+          gst_caps_from_string (VIDEO_AND_VPIIMAGE_CAPS)));
+  gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
       gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
-        gst_caps_from_string (VIDEO_SINK_CAPS)));
+          gst_caps_from_string (VIDEO_AND_VPIIMAGE_CAPS)));
 
-  gst_element_class_set_static_metadata (GST_ELEMENT_CLASS(klass),
+  gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "VPI Undistort", "filter", "VPI based camera lens undistort element.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
@@ -73,7 +69,7 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
 }
 
 static void
-gst_vpi_undistort_init (GstVpiUndistort *vpi_undistort)
+gst_vpi_undistort_init (GstVpiUndistort * vpi_undistort)
 {
 }
 

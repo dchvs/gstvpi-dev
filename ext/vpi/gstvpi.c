@@ -14,6 +14,9 @@
 #include "config.h"
 #endif
 
+#include <gst/gst.h>
+
+#include "gstvpidownload.h"
 #include "gstvpiundistort.h"
 #include "gstvpiupload.h"
 
@@ -21,6 +24,12 @@ static gboolean
 vpi_init (GstPlugin * vpi)
 {
   gboolean ret = FALSE;
+
+  if (!gst_element_register (vpi, "vpidownload", GST_RANK_NONE,
+          GST_TYPE_VPI_DOWNLOAD)) {
+    GST_ERROR ("Failed to register vpidownload");
+    goto out;
+  }
 
   if (!gst_element_register (vpi, "vpiundistort", GST_RANK_NONE,
           GST_TYPE_VPI_UNDISTORT)) {
@@ -32,7 +41,7 @@ vpi_init (GstPlugin * vpi)
           GST_TYPE_VPI_UPLOAD)) {
     GST_ERROR ("Failed to register vpiupload");
     goto out;
-  }
+  }  
 
   ret = TRUE;
 

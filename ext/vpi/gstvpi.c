@@ -15,12 +15,29 @@
 #endif
 
 #include "gstvpiundistort.h"
+#include "gstvpiupload.h"
 
 static gboolean
 vpi_init (GstPlugin * vpi)
 {
-  return gst_element_register (vpi, "vpiundistort", GST_RANK_NONE,
-      GST_TYPE_VPI_UNDISTORT);
+  gboolean ret = FALSE;
+
+  if (!gst_element_register (vpi, "vpiundistort", GST_RANK_NONE,
+          GST_TYPE_VPI_UNDISTORT)) {
+    GST_ERROR ("Failed to register vpiundistort");
+    goto out;
+  }
+
+  if (!gst_element_register (vpi, "vpiupload", GST_RANK_NONE,
+          GST_TYPE_VPI_UPLOAD)) {
+    GST_ERROR ("Failed to register vpiupload");
+    goto out;
+  }
+
+  ret = TRUE;
+
+out:
+  return ret;
 }
 
 #ifndef VERSION

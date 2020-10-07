@@ -16,6 +16,7 @@
 
 static gboolean gst_vpi_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
+static void gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer);
 
 GType
 gst_vpi_meta_api_get_type (void)
@@ -40,7 +41,7 @@ gst_vpi_meta_get_info (void)
         "GstVPIMeta",
         sizeof (GstVPIMeta),
         gst_vpi_meta_init,
-        NULL,
+        gst_vpi_meta_free,
         NULL);
     g_once_init_leave (&info, meta);
   }
@@ -48,13 +49,37 @@ gst_vpi_meta_get_info (void)
 }
 
 GstVPIMeta *
-gst_buffer_add_vpi_meta (GstBuffer * buffer)
+gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 {
+  GstVPIMeta *meta = NULL;
+  GstMapInfo *minfo = NULL;
+  VPIImageData vpi_imgdata;
+  VPIStatus status;
+
   g_return_val_if_fail (buffer != NULL, NULL);
+  g_return_val_if_fail (video_info != NULL, NULL);
 
   GST_LOG ("Adding VPI meta to buffer %p", buffer);
 
-  return (GstVPIMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
+  minfo = g_slice_new0 (GstMapInfo);
+  gst_buffer_map (buffer, minfo, GST_MAP_READ | GST_MAP_WRITE);
+
+  meta = (GstVPIMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
+
+  memset (&(vpi_imgdata), 0, sizeof (vpi_imgdata));
+  vpi_imgdata.type = VPI_IMAGE_TYPE_U8;
+  vpi_imgdata.numPlanes = 1;
+  vpi_imgdata.planes[0].width = GST_VIDEO_INFO_WIDTH (video_info);
+  vpi_imgdata.planes[0].height = GST_VIDEO_INFO_HEIGHT (video_info);
+  vpi_imgdata.planes[0].rowStride = video_info->stride[0];
+  vpi_imgdata.planes[0].data = minfo->data;
+
+  status = vpiImageWrapCudaDeviceMem (&vpi_imgdata, 0, &(meta->vpi_image));
+  if (status != VPI_SUCCESS) {
+    GST_ERROR ("Could not wrap buffer in VPIImage");
+  }
+
+  return meta;
 }
 
 static gboolean
@@ -62,4 +87,12 @@ gst_vpi_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
 {
   /* Gst requires this func to be implemented, even if it is empty */
   return TRUE;
+}
+
+static void
+gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
+{
+  GstVPIMeta *vpi_meta = (GstVPIMeta *) meta;
+
+  vpiImageDestroy (vpi_meta->vpi_image);
 }

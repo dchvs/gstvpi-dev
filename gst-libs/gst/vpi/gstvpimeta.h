@@ -14,6 +14,8 @@
 #define __GST_VPI_META_H__
 
 #include <gst/gst.h>
+#include <vpi/Image.h>
+#include <gst/video/video.h>
 
 G_BEGIN_DECLS 
 
@@ -30,19 +32,21 @@ typedef struct _GstVPIMeta GstVPIMeta;
  */
 struct _GstVPIMeta {
   GstMeta meta;
-};
 
+  VPIImage vpi_image;
+};
 
 /**
  * gst_buffer_add_vpi_meta
  * @buffer: (in) (transfer none) a #GstBuffer
+ * @video_info: (in) (transfer none) a #GstVideoInfo
  *
  * Attaches GstVPIMeta metadata to @buffer with
  * the given parameters.
  *
  * Returns: (transfer none): the #GstVPIMeta on @buffer.
  */
-GstVPIMeta * gst_buffer_add_vpi_meta (GstBuffer * buffer);
+GstVPIMeta * gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info);
 
 GType gst_vpi_meta_api_get_type (void);
 const GstMetaInfo *gst_vpi_meta_get_info (void);

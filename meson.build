@@ -31,10 +31,12 @@ cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
 mult_api_dep = declare_dependency(
     include_directories : include_directories('/usr/src/jetson_multimedia_api/include/'),
 )
+c = meson.get_compiler('c')
+vpi_dep = c.find_library('nvvpi')
 
 ## Dependencies
 # Define plugin dependencies
-plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, mult_api_dep]
+plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, mult_api_dep, vpi_dep]
 # Examples dependencies
 example_deps = [gst_dep, gst_base_dep]
 # Define test dependencies

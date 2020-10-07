@@ -149,7 +149,7 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
   }
 
   gst_buffer_add_cuda_meta (outbuf);
-  gst_buffer_add_vpi_meta (outbuf);
+  gst_buffer_add_vpi_meta (outbuf, &(self->caps_info));
 
   *buffer = outbuf;
   ret = GST_FLOW_OK;

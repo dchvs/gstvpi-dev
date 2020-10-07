@@ -12,8 +12,59 @@
 
 #include <gst/check/gstcheck.h>
 
-GST_START_TEST (test_dummy)
+#define NUMBER_OF_STATE_CHANGES 5
+
+static const gchar *test_pipes[] = {
+  "videotestsrc ! vpiupload ! vpiundistort ! vpidownload ! fakesink",
+  "videotestsrc ! vpiupload ! vpiundistort ! vpiundistort ! vpidownload ! fakesink",
+  NULL,
+};
+
+enum
 {
+  /* test names */
+  TEST_STATES_CHANGE_SINGLE_UNDISTORT,
+  TEST_STATES_CHANGE_DOUBLE_UNDISTORT,
+};
+
+static void
+states_change (const gchar * pipe_desc)
+{
+  GstElement *pipeline = NULL;
+  GError *error = NULL;
+  gint i = 0;
+
+  GST_INFO ("testing pipeline %s", pipe_desc);
+
+  pipeline = gst_parse_launch (pipe_desc, &error);
+
+  /* Check for errors creating pipeline */
+  fail_if (error != NULL, error);
+  fail_if (pipeline == NULL, error);
+
+  for (i = 0; i < NUMBER_OF_STATE_CHANGES; i++) {
+
+    fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_PLAYING),
+        GST_STATE_CHANGE_ASYNC);
+    fail_unless_equals_int (gst_element_get_state (pipeline, NULL, NULL, -1),
+        GST_STATE_CHANGE_SUCCESS);
+    fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_NULL),
+        GST_STATE_CHANGE_SUCCESS);
+  }
+
+  gst_object_unref (pipeline);
+}
+
+GST_START_TEST (test_states_change_single_undistort)
+{
+  states_change (test_pipes[TEST_STATES_CHANGE_SINGLE_UNDISTORT]);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_states_change_double_undistort)
+{
+  states_change (test_pipes[TEST_STATES_CHANGE_DOUBLE_UNDISTORT]);
 }
 
 GST_END_TEST;
@@ -25,7 +76,8 @@ gst_vpi_undistort_suite (void)
   TCase *tc = tcase_create ("general");
 
   suite_add_tcase (suite, tc);
-  tcase_add_test (tc, test_dummy);
+  tcase_add_test (tc, test_states_change_single_undistort);
+  tcase_add_test (tc, test_states_change_double_undistort);
 
   return suite;
 }

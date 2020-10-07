@@ -63,7 +63,8 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
           gst_caps_from_string (VIDEO_AND_VPIIMAGE_CAPS)));
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
-      "VPI Undistort", "filter", "VPI based camera lens undistort element.",
+      "VPI Undistort", "Filter/Video",
+      "VPI based camera lens undistort element.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
   vpi_filter_class->transform_image =

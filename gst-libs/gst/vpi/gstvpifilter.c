@@ -31,9 +31,10 @@ struct _GstVpiFilterPrivate
 
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe);
-static void gst_vpi_filter_finalize (GObject * object);
+static gboolean gst_vpi_filter_start (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_decide_allocation (GstBaseTransform * trans,
     GstQuery * query);
+static void gst_vpi_filter_finalize (GObject * object);
 
 enum
 {
@@ -57,6 +58,7 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
 
   video_filter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_transform_frame);
+  base_transform_class->start = GST_DEBUG_FUNCPTR (gst_vpi_filter_start);
   base_transform_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_decide_allocation);
   gobject_class->finalize = gst_vpi_filter_finalize;
@@ -72,24 +74,43 @@ gst_vpi_filter_init (GstVpiFilter * self)
   priv->downstream_buffer_pool = NULL;
 }
 
+static gboolean
+gst_vpi_filter_start (GstBaseTransform * trans)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (trans);
+  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  gboolean ret = TRUE;
+
+  GST_DEBUG_OBJECT (self, "start");
+
+  if (!vpi_filter_class->transform_image) {
+    GST_ERROR_OBJECT (self, "Subclass did not implement transform_image()");
+    ret = FALSE;
+  }
+
+  return ret;
+}
+
 static GstFlowReturn
 gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe)
 {
   GstVpiFilter *self = GST_VPI_FILTER (filter);
+  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
   GstFlowReturn ret = GST_FLOW_ERROR;
   GstMeta *meta = NULL;
-  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
   VPIImage in_image;
   VPIImage out_image;
 
   GST_DEBUG_OBJECT (filter, "Transform frame");
 
   meta = gst_buffer_get_meta (inframe->buffer, GST_CUDA_META_API_TYPE);
+
   if (meta) {
     GST_DEBUG_OBJECT (self, "Received buffer with CUDA meta");
-
-    ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
+    if (vpi_filter_class->transform_image) {
+      ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
+    }
   } else {
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not contain the CUDA meta");

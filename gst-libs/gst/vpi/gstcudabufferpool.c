@@ -15,6 +15,7 @@
 #include "gstcudabufferpool.h"
 #include "gstcudaallocator.h"
 #include "gstcudameta.h"
+#include "gstvpimeta.h"
 
 /**
  * SECTION:gstcudabufferpool
@@ -148,6 +149,7 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
   }
 
   gst_buffer_add_cuda_meta (outbuf);
+  gst_buffer_add_vpi_meta (outbuf);
 
   *buffer = outbuf;
   ret = GST_FLOW_OK;

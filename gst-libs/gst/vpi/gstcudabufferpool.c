@@ -77,10 +77,10 @@ static gboolean
 gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 {
   GstCudaBufferPool *self = GST_CUDA_BUFFER_POOL (pool);
-  guint size;
+  guint size = 0;
   GstCaps *caps = NULL;
-  guint min_buffers;
-  guint max_buffers;
+  guint min_buffers = 0;
+  guint max_buffers = 0;
 
   if (!gst_buffer_pool_config_get_params (config, &caps, &size, &min_buffers,
           &max_buffers)) {
@@ -122,8 +122,8 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
 {
   GstCudaBufferPool *self = GST_CUDA_BUFFER_POOL (pool);
   GstFlowReturn ret = GST_FLOW_ERROR;
-  GstBuffer *outbuf;
-  GstMemory *outmem;
+  GstBuffer *outbuf = NULL;
+  GstMemory *outmem = NULL;
 
   GST_DEBUG_OBJECT (self, "Allocating cuda buffer");
 

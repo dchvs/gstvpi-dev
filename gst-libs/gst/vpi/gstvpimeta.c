@@ -25,7 +25,7 @@ gst_vpi_meta_api_get_type (void)
   static const gchar *tags[] = { GST_META_TAG_VIDEO_STR, NULL };
 
   if (g_once_init_enter (&type)) {
-    GType _type = gst_meta_api_type_register ("GstVPIMetaAPI", tags);
+    GType _type = gst_meta_api_type_register ("GstVpiMetaAPI", tags);
     g_once_init_leave (&type, _type);
   }
   return type;
@@ -38,8 +38,8 @@ gst_vpi_meta_get_info (void)
 
   if (g_once_init_enter (&info)) {
     const GstMetaInfo *meta = gst_meta_register (GST_VPI_META_API_TYPE,
-        "GstVPIMeta",
-        sizeof (GstVPIMeta),
+        "GstVpiMeta",
+        sizeof (GstVpiMeta),
         gst_vpi_meta_init,
         gst_vpi_meta_free,
         NULL);
@@ -48,10 +48,10 @@ gst_vpi_meta_get_info (void)
   return info;
 }
 
-GstVPIMeta *
+GstVpiMeta *
 gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 {
-  GstVPIMeta *meta = NULL;
+  GstVpiMeta *meta = NULL;
   GstMapInfo *minfo = NULL;
   VPIImageData vpi_imgdata;
   VPIStatus status;
@@ -64,7 +64,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   minfo = g_slice_new0 (GstMapInfo);
   gst_buffer_map (buffer, minfo, GST_MAP_READ | GST_MAP_WRITE);
 
-  meta = (GstVPIMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
+  meta = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
 
   memset (&(vpi_imgdata), 0, sizeof (vpi_imgdata));
   vpi_imgdata.type = VPI_IMAGE_TYPE_U8;
@@ -92,7 +92,7 @@ gst_vpi_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
 static void
 gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
 {
-  GstVPIMeta *vpi_meta = (GstVPIMeta *) meta;
+  GstVpiMeta *vpi_meta = (GstVpiMeta *) meta;
 
   vpiImageDestroy (vpi_meta->vpi_image);
 }

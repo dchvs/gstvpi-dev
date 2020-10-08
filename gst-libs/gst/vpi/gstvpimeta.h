@@ -22,15 +22,15 @@ G_BEGIN_DECLS
 #define GST_VPI_META_API_TYPE (gst_vpi_meta_api_get_type())
 #define GST_VPI_META_INFO  (gst_vpi_meta_get_info())
 
-typedef struct _GstVPIMeta GstVPIMeta;
+typedef struct _GstVpiMeta GstVpiMeta;
 
 /**
- * GstVPIMeta:
+ * GstVpiMeta:
  * @meta: parent #GstMeta
  *
  * Extra buffer metadata, wraping UM pointer in VPIImage.
  */
-struct _GstVPIMeta {
+struct _GstVpiMeta {
   GstMeta meta;
 
   VPIImage vpi_image;
@@ -41,12 +41,12 @@ struct _GstVPIMeta {
  * @buffer: (in) (transfer none) a #GstBuffer
  * @video_info: (in) (transfer none) a #GstVideoInfo
  *
- * Attaches GstVPIMeta metadata to @buffer with
+ * Attaches GstVpiMeta metadata to @buffer with
  * the given parameters.
  *
- * Returns: (transfer none): the #GstVPIMeta on @buffer.
+ * Returns: (transfer none): the #GstVpiMeta on @buffer.
  */
-GstVPIMeta * gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info);
+GstVpiMeta * gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info);
 
 GType gst_vpi_meta_api_get_type (void);
 const GstMetaInfo *gst_vpi_meta_get_info (void);

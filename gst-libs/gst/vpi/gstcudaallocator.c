@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 RidgeRun, LLC (http://www.ridgerun.com)
+ * Copyright (C) 2017 RidgeRun, LLC (http://www.ridgerun.com)
  * All Rights Reserved.
  *
  * The contents of this software are proprietary and confidential to RidgeRun,
@@ -81,13 +81,13 @@ gst_cuda_allocator_alloc (GstAllocator * allocator, gsize size,
     GstAllocationParams * params)
 {
   GstMemory *mem = NULL;
-  gsize max;
-  gsize alignm1;
-  guint8 *data;
-  guint8 *dataaligned;
-  gsize offset;
-  cudaError_t status;
-  const gchar *errstr;
+  gsize max = 0;
+  gsize alignm1 = 0;
+  guint8 *data = NULL;
+  guint8 *dataaligned = NULL;
+  gsize offset = 0;
+  cudaError_t status = cudaErrorMemoryAllocation;
+  const gchar *errstr = NULL;
 
   g_return_val_if_fail (GST_CUDA_IS_ALLOCATOR (allocator), NULL);
   g_return_val_if_fail (size > 0, NULL);
@@ -155,8 +155,8 @@ gst_cuda_allocator_free (GstAllocator * allocator, GstMemory * memory)
 static void
 gst_cuda_allocator_free_data (gpointer data)
 {
-  cudaError_t status;
-  const gchar *errstr;
+  cudaError_t status = cudaErrorInvalidValue;
+  const gchar *errstr = NULL;
 
   g_return_if_fail (data);
 

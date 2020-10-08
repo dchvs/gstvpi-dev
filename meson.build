@@ -20,14 +20,14 @@ api_version = '1.0'
 
 # Required versions
 gst_req = '>= 1.0.0'
-cu_req = '>=10'
+cuda_req = '>=10'
 
 # Find external dependencies
 gst_dep       = dependency('gstreamer-1.0',      version : gst_req)
 gst_base_dep  = dependency('gstreamer-base-1.0', version : gst_req)
 gst_check_dep = dependency('gstreamer-check-1.0',version : gst_req)
 gst_video_dep = dependency('gstreamer-video-1.0',version : gst_req)
-cuda_dep = dependency('cuda', version : cu_req, modules : ['cudart'])
+cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
 mult_api_dep = declare_dependency(
     include_directories : include_directories('/usr/src/jetson_multimedia_api/include/'),
 )

@@ -25,7 +25,6 @@ typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 
 struct _GstVpiFilterPrivate
 {
-  GstVideoInfo out_caps_info;
   GstCudaBufferPool *downstream_buffer_pool;
 };
 
@@ -146,8 +145,7 @@ static gboolean
 gst_vpi_filter_create_buffer_pool (GstVpiFilter * self,
     GstCudaBufferPool * buffer_pool, GstQuery * query)
 {
-  GstVpiFilterPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-      GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
+  GstVideoFilter *video_filter = GST_VIDEO_FILTER (self);
   gsize size = 0;
   GstStructure *config = NULL;
   GstBufferPool *pool = NULL;
@@ -160,7 +158,7 @@ gst_vpi_filter_create_buffer_pool (GstVpiFilter * self,
   gst_query_parse_allocation (query, &caps, &need_pool);
 
   pool = GST_BUFFER_POOL (buffer_pool);
-  size = gst_vpi_filter_compute_size (self, &priv->out_caps_info);
+  size = gst_vpi_filter_compute_size (self, &video_filter->out_info);
 
   config = gst_buffer_pool_get_config (pool);
   gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
@@ -189,7 +187,7 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
       GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
   gint npool = 0;
 
-  GST_INFO_OBJECT (self, "Deciding allocation");
+  GST_INFO_OBJECT (trans, "Deciding allocation");
 
   if (!priv->downstream_buffer_pool) {
     priv->downstream_buffer_pool =

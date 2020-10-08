@@ -104,7 +104,7 @@ gst_vpi_upload_init (GstVpiUpload * self)
 }
 
 static GstCaps *
-gst_vpi_download_transform_downstream_caps (GstVpiUpload * self,
+gst_vpi_upload_transform_downstream_caps (GstVpiUpload * self,
     GstCaps * caps_src)
 {
   GstCaps *vpiimage = NULL;
@@ -130,8 +130,7 @@ gst_vpi_download_transform_downstream_caps (GstVpiUpload * self,
 }
 
 static GstCaps *
-gst_vpi_download_transform_upstream_caps (GstVpiUpload * self,
-    GstCaps * caps_src)
+gst_vpi_upload_transform_upstream_caps (GstVpiUpload * self, GstCaps * caps_src)
 {
   gint i = 0;
 
@@ -162,10 +161,10 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */
-    result = gst_vpi_download_transform_upstream_caps (self, given_caps);
+    result = gst_vpi_upload_transform_upstream_caps (self, given_caps);
   } else if (direction == GST_PAD_SINK) {
     /* transform caps going downstream */
-    result = gst_vpi_download_transform_downstream_caps (self, given_caps);
+    result = gst_vpi_upload_transform_downstream_caps (self, given_caps);
   } else {
     /* unknown direction */
     GST_ERROR_OBJECT (trans,

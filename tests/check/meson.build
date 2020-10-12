@@ -5,8 +5,9 @@ endif
 
 # Name, condition when to skip the test, extra dependencies and extra files
 gst_tests = [
-  ['elements/vpiundistort', false, [],  [] ],
   ['elements/vpidownload', false, [],  [] ],
+  ['elements/vpiundistort', false, [],  [] ],
+  ['elements/vpiupload', false, [],  [] ],
   ['libs/vpifilter', false, [],  [] ]
 ]
 

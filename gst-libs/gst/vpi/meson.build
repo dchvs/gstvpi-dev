@@ -1,10 +1,16 @@
 # Define source code
 gst_lib_sources = [
-  'gstvpifilter.c',
+  'gstcudaallocator.c',
+  'gstcudabufferpool.c',
+  'gstcudameta.c',
+  'gstvpifilter.c'
 ]
 
 gst_lib_headers = [
-  'gstvpifilter.h',
+  'gstcudaallocator.h',
+  'gstcudabufferpool.h',
+  'gstcudameta.h',
+  'gstvpifilter.h'
 ]
 
 # Build library

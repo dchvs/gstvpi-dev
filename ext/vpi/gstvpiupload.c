@@ -107,25 +107,24 @@ static GstCaps *
 gst_vpi_upload_transform_downstream_caps (GstVpiUpload * self,
     GstCaps * caps_src)
 {
-  GstCaps *vpiimage = NULL;
+  GstCaps *ret = NULL;
   GstCapsFeatures *vpiimage_feature = NULL;
   gint i = 0;
 
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  vpiimage = gst_caps_copy (caps_src);
+  ret = gst_caps_copy (caps_src);
   vpiimage_feature = gst_caps_features_from_string ("memory:VPIImage");
 
-  for (i = 0; i < gst_caps_get_size (vpiimage); i++) {
+  for (i = 0; i < gst_caps_get_size (ret); i++) {
     /* Add VPIImage to all structures */
-    gst_caps_set_features (vpiimage, i,
-        gst_caps_features_copy (vpiimage_feature));
+    gst_caps_set_features (ret, i, gst_caps_features_copy (vpiimage_feature));
   }
 
   gst_caps_features_free (vpiimage_feature);
 
-  return vpiimage;
+  return ret;
 }
 
 static GstCaps *
@@ -150,7 +149,7 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
   GstCaps *given_caps = NULL;
-  GstCaps *result = NULL;
+  GstCaps *ret = NULL;
 
   GST_DEBUG_OBJECT (self, "Transforming caps on %s:caps: %"
       GST_PTR_FORMAT "filter: %" GST_PTR_FORMAT,
@@ -160,10 +159,10 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */
-    result = gst_vpi_upload_transform_upstream_caps (self, given_caps);
+    ret = gst_vpi_upload_transform_upstream_caps (self, given_caps);
   } else if (direction == GST_PAD_SINK) {
     /* transform caps going downstream */
-    result = gst_vpi_upload_transform_downstream_caps (self, given_caps);
+    ret = gst_vpi_upload_transform_downstream_caps (self, given_caps);
   } else {
     /* unknown direction */
     GST_ERROR_OBJECT (self, "Cannot transform caps of unknown GstPadDirection");
@@ -171,15 +170,15 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
   }
 
   if (filter) {
-    GstCaps *tmp = result;
-    result = gst_caps_intersect (filter, result);
+    GstCaps *tmp = ret;
+    ret = gst_caps_intersect (filter, ret);
     gst_caps_unref (tmp);
   }
 
 out:
-  GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, result);
+  GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, ret);
 
-  return result;
+  return ret;
 }
 
 static gboolean
@@ -187,47 +186,47 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
     GstCaps * outcaps)
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
-  gboolean status = FALSE;
+  gboolean ret = FALSE;
 
   GST_DEBUG_OBJECT (self, "set_caps");
 
-  status = gst_video_info_from_caps (&self->in_caps_info, incaps);
-  if (!status) {
+  ret = gst_video_info_from_caps (&self->in_caps_info, incaps);
+  if (!ret) {
     GST_ERROR_OBJECT (self, "Unable to get the input caps");
     goto out;
   }
 
-  status = gst_video_info_from_caps (&self->out_caps_info, outcaps);
-  if (!status) {
+  ret = gst_video_info_from_caps (&self->out_caps_info, outcaps);
+  if (!ret) {
     GST_ERROR_OBJECT (self, "Unable to get the output caps");
     goto out;
   }
 
-  status = TRUE;
+  ret = TRUE;
 
 out:
-  return status;
+  return ret;
 }
 
 static gsize
 gst_cuda_base_filter_compute_size (GstVpiUpload * self, GstVideoInfo * info)
 {
-  gsize size = 0;
+  gsize ret = 0;
 
   g_return_val_if_fail (self, 0);
   g_return_val_if_fail (info, 0);
 
   if (info->size) {
-    size = info->size;
+    ret = info->size;
   } else {
-    size = (info->stride[0] * info->height) +
+    ret = (info->stride[0] * info->height) +
         (info->stride[1] * info->height / 2) +
         (info->stride[2] * info->height / 2);
   }
 
-  GST_LOG_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, size);
+  GST_LOG_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, ret);
 
-  return size;
+  return ret;
 }
 
 static gboolean

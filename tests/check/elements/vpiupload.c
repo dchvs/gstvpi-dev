@@ -23,13 +23,13 @@ static const gchar *test_pipes[] = {
 enum
 {
   /* test names */
-  TEST_SUCCESS_POOL_NEGOTIATION,
-  TEST_FAIL_POOL_NEGOTIATION,
-  TEST_FAIL_CAPS_COMPATIBILITY_SRC,
-  TEST_FAIL_CAPS_COMPATIBILITY_WIDTH_HEIGHT
+  TEST_SUCCESS_CAPS_NEGOTIATION,
+  TEST_PIPE_NOT_PLAYABLE,
+  TEST_FAIL_PADS_COMPATIBILITY_SRC,
+  TEST_FAIL_PADS_COMPATIBILITY_WIDTH_HEIGHT
 };
 
-GST_START_TEST (test_success_pool_negotiation)
+GST_START_TEST (test_success_caps_negotiation)
 {
   GstElement *pipeline = NULL;
   GstElement *vpiupload = NULL;
@@ -41,7 +41,7 @@ GST_START_TEST (test_success_pool_negotiation)
   GstCaps *sink_caps_copy = NULL;
 
   pipeline =
-      gst_parse_launch (test_pipes[TEST_SUCCESS_POOL_NEGOTIATION], &error);
+      gst_parse_launch (test_pipes[TEST_SUCCESS_CAPS_NEGOTIATION], &error);
 
   /* Check for errors creating pipeline */
   fail_if (error != NULL, error);
@@ -90,12 +90,12 @@ GST_START_TEST (test_success_pool_negotiation)
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_pool_negotiation)
+GST_START_TEST (test_pipe_not_playable)
 {
   GstElement *pipeline = NULL;
   GError *error = NULL;
 
-  pipeline = gst_parse_launch (test_pipes[TEST_FAIL_POOL_NEGOTIATION], &error);
+  pipeline = gst_parse_launch (test_pipes[TEST_PIPE_NOT_PLAYABLE], &error);
 
   /* Check for errors creating pipeline */
   fail_if (error != NULL, error);
@@ -117,7 +117,7 @@ GST_START_TEST (test_fail_pool_negotiation)
 GST_END_TEST;
 
 static void
-fail_caps_compatibility (const gchar * pipe_desc)
+fail_pads_compatibility (const gchar * pipe_desc)
 {
   GstElement *pipeline = NULL;
   GError *error = NULL;
@@ -130,17 +130,17 @@ fail_caps_compatibility (const gchar * pipe_desc)
   gst_object_unref (pipeline);
 }
 
-GST_START_TEST (test_fail_caps_compatibility_src)
+GST_START_TEST (test_fail_pads_compatibility_src)
 {
-  fail_caps_compatibility (test_pipes[TEST_FAIL_CAPS_COMPATIBILITY_SRC]);
+  fail_pads_compatibility (test_pipes[TEST_FAIL_PADS_COMPATIBILITY_SRC]);
 }
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_caps_compatibility_width_height)
+GST_START_TEST (test_fail_pads_compatibility_width_height)
 {
-  fail_caps_compatibility (test_pipes
-      [TEST_FAIL_CAPS_COMPATIBILITY_WIDTH_HEIGHT]);
+  fail_pads_compatibility (test_pipes
+      [TEST_FAIL_PADS_COMPATIBILITY_WIDTH_HEIGHT]);
 }
 
 GST_END_TEST;
@@ -152,10 +152,10 @@ gst_vpi_upload_suite (void)
   TCase *tc = tcase_create ("general");
 
   suite_add_tcase (suite, tc);
-  tcase_add_test (tc, test_success_pool_negotiation);
-  tcase_add_test (tc, test_fail_pool_negotiation);
-  tcase_add_test (tc, test_fail_caps_compatibility_src);
-  tcase_add_test (tc, test_fail_caps_compatibility_width_height);
+  tcase_add_test (tc, test_success_caps_negotiation);
+  tcase_add_test (tc, test_pipe_not_playable);
+  tcase_add_test (tc, test_fail_pads_compatibility_src);
+  tcase_add_test (tc, test_fail_pads_compatibility_width_height);
 
   return suite;
 }

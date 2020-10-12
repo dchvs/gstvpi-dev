@@ -118,7 +118,6 @@ gst_vpi_upload_transform_downstream_caps (GstVpiUpload * self,
   vpiimage_feature = gst_caps_features_from_string ("memory:VPIImage");
 
   for (i = 0; i < gst_caps_get_size (vpiimage); i++) {
-
     /* Add VPIImage to all structures */
     gst_caps_set_features (vpiimage, i,
         gst_caps_features_copy (vpiimage_feature));
@@ -283,8 +282,6 @@ gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
 
   return gst_vpi_upload_create_buffer_pool (self,
       self->upstream_buffer_pool, query);
-
-  return TRUE;
 }
 
 static GstFlowReturn

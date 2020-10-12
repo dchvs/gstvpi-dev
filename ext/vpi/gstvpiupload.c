@@ -166,8 +166,7 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     result = gst_vpi_upload_transform_downstream_caps (self, given_caps);
   } else {
     /* unknown direction */
-    GST_ERROR_OBJECT (trans,
-        "Cannot transform caps of unknown GstPadDirection");
+    GST_ERROR_OBJECT (self, "Cannot transform caps of unknown GstPadDirection");
     goto out;
   }
 
@@ -190,17 +189,17 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
   gboolean status = FALSE;
 
-  GST_INFO_OBJECT (self, "set_caps");
+  GST_DEBUG_OBJECT (self, "set_caps");
 
   status = gst_video_info_from_caps (&self->in_caps_info, incaps);
   if (!status) {
-    GST_ERROR ("Unable to get the input caps");
+    GST_ERROR_OBJECT (self, "Unable to get the input caps");
     goto out;
   }
 
   status = gst_video_info_from_caps (&self->out_caps_info, outcaps);
   if (!status) {
-    GST_ERROR ("Unable to get the output caps");
+    GST_ERROR_OBJECT (self, "Unable to get the output caps");
     goto out;
   }
 

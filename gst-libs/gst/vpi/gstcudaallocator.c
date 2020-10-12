@@ -14,7 +14,6 @@
 
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <nvbuf_utils.h>
 
 /**
  * SECTION:gstcudaallocator

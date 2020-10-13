@@ -185,7 +185,7 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
   GstVpiFilter *self = GST_VPI_FILTER (trans);
   GstVpiFilterPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
       GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
-  gint npool = 0;
+  gint i = 0;
 
   GST_INFO_OBJECT (trans, "Deciding allocation");
 
@@ -195,15 +195,15 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
   }
 
   /* We can't use dowstream provided pools, since we need unified memory */
-  for (npool = 0; npool < gst_query_get_n_allocation_pools (query); npool++) {
+  for (i = 0; i < gst_query_get_n_allocation_pools (query); i++) {
     GstBufferPool *pool;
 
-    gst_query_parse_nth_allocation_pool (query, npool, &pool, NULL, NULL, NULL);
+    gst_query_parse_nth_allocation_pool (query, i, &pool, NULL, NULL, NULL);
     GST_INFO_OBJECT (self, "Discarding downstream pool \"%s\"",
         GST_OBJECT_NAME (pool));
     gst_object_unref (pool);
 
-    gst_query_remove_nth_allocation_pool (query, npool);
+    gst_query_remove_nth_allocation_pool (query, i);
   }
 
   return gst_vpi_filter_create_buffer_pool (self,

@@ -103,6 +103,8 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   GST_DEBUG_OBJECT (filter, "Transform frame");
 
+  g_return_val_if_fail (filter != NULL, GST_FLOW_ERROR);
+
   meta = gst_buffer_get_meta (inframe->buffer, GST_CUDA_META_API_TYPE);
 
   if (meta) {

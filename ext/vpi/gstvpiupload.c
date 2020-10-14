@@ -188,8 +188,6 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
   gboolean ret = FALSE;
 
-  GST_DEBUG_OBJECT (self, "set_caps");
-
   ret = gst_video_info_from_caps (&self->in_caps_info, incaps);
   if (!ret) {
     GST_ERROR_OBJECT (self, "Unable to get the input caps");
@@ -205,27 +203,6 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
   ret = TRUE;
 
 out:
-  return ret;
-}
-
-static gsize
-gst_cuda_base_filter_compute_size (GstVpiUpload * self, GstVideoInfo * info)
-{
-  gsize ret = 0;
-
-  g_return_val_if_fail (self, 0);
-  g_return_val_if_fail (info, 0);
-
-  if (info->size) {
-    ret = info->size;
-  } else {
-    ret = (info->stride[0] * info->height) +
-        (info->stride[1] * info->height / 2) +
-        (info->stride[2] * info->height / 2);
-  }
-
-  GST_LOG_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, ret);
-
   return ret;
 }
 
@@ -245,7 +222,7 @@ gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
   gst_query_parse_allocation (query, &caps, &need_pool);
 
   pool = GST_BUFFER_POOL (buffer_pool);
-  size = gst_cuda_base_filter_compute_size (self, &self->in_caps_info);
+  size = self->in_caps_info.size;
 
   config = gst_buffer_pool_get_config (pool);
   gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
@@ -298,10 +275,8 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not use the proposed allocation.");
     ret = GST_FLOW_ERROR;
-    goto out;
   }
 
-out:
   return ret;
 }
 

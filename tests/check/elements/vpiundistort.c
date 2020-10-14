@@ -23,8 +23,8 @@ static const gchar *test_pipes[] = {
 enum
 {
   /* test names */
-  TEST_STATES_CHANGE_SINGLE_UNDISTORT,
-  TEST_STATES_CHANGE_DOUBLE_UNDISTORT,
+  TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_SINGLE_UNDISTORT,
+  TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_DOUBLE_UNDISTORT,
 };
 
 static void
@@ -55,16 +55,18 @@ states_change (const gchar * pipe_desc)
   gst_object_unref (pipeline);
 }
 
-GST_START_TEST (test_states_change_single_undistort)
+GST_START_TEST (test_playing_to_null_multiple_times_single_undistort)
 {
-  states_change (test_pipes[TEST_STATES_CHANGE_SINGLE_UNDISTORT]);
+  states_change (test_pipes
+      [TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_SINGLE_UNDISTORT]);
 }
 
 GST_END_TEST;
 
-GST_START_TEST (test_states_change_double_undistort)
+GST_START_TEST (test_playing_to_null_multiple_times_double_undistort)
 {
-  states_change (test_pipes[TEST_STATES_CHANGE_DOUBLE_UNDISTORT]);
+  states_change (test_pipes
+      [TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_DOUBLE_UNDISTORT]);
 }
 
 GST_END_TEST;
@@ -76,8 +78,8 @@ gst_vpi_undistort_suite (void)
   TCase *tc = tcase_create ("general");
 
   suite_add_tcase (suite, tc);
-  tcase_add_test (tc, test_states_change_single_undistort);
-  tcase_add_test (tc, test_states_change_double_undistort);
+  tcase_add_test (tc, test_playing_to_null_multiple_times_single_undistort);
+  tcase_add_test (tc, test_playing_to_null_multiple_times_double_undistort);
 
   return suite;
 }

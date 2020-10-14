@@ -86,7 +86,7 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter,
   GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
   GstFlowReturn ret = GST_FLOW_OK;
 
-  GST_DEBUG_OBJECT (self, "Transform image");
+  GST_INFO_OBJECT (self, "Transform image");
 
   /* TODO: Call to undistort function */
 

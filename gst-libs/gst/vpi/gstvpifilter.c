@@ -136,7 +136,7 @@ gst_vpi_filter_compute_size (GstVpiFilter * self, GstVideoInfo * info)
         (info->stride[2] * info->height / 2);
   }
 
-  GST_LOG_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, size);
+  GST_INFO_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, size);
 
   return size;
 }

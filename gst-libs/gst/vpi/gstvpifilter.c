@@ -106,17 +106,12 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   meta = gst_buffer_get_meta (inframe->buffer, GST_CUDA_META_API_TYPE);
 
   if (meta) {
-    GST_DEBUG_OBJECT (self, "Received buffer with CUDA meta");
-    if (vpi_filter_class->transform_image) {
-      ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
-    }
+    ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
   } else {
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not contain the CUDA meta");
-    goto out;
   }
 
-out:
   return ret;
 }
 

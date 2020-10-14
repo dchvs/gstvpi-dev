@@ -52,7 +52,7 @@ GstVpiMeta *
 gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 {
   GstVpiMeta *meta = NULL;
-  GstMapInfo *minfo = NULL;
+  GstMapInfo minfo;
   VPIImageData vpi_imgdata;
   VPIStatus status;
 
@@ -61,8 +61,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 
   GST_LOG ("Adding VPI meta to buffer %p", buffer);
 
-  minfo = g_slice_new0 (GstMapInfo);
-  gst_buffer_map (buffer, minfo, GST_MAP_READ | GST_MAP_WRITE);
+  gst_buffer_map (buffer, &minfo, GST_MAP_READ);
 
   meta = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
 
@@ -72,7 +71,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   vpi_imgdata.planes[0].width = GST_VIDEO_INFO_WIDTH (video_info);
   vpi_imgdata.planes[0].height = GST_VIDEO_INFO_HEIGHT (video_info);
   vpi_imgdata.planes[0].rowStride = video_info->stride[0];
-  vpi_imgdata.planes[0].data = minfo->data;
+  vpi_imgdata.planes[0].data = minfo.data;
 
   status = vpiImageWrapCudaDeviceMem (&vpi_imgdata, 0, &(meta->vpi_image));
   if (status != VPI_SUCCESS) {

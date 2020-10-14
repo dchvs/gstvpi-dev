@@ -96,7 +96,7 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 {
   GstVpiFilter *self = GST_VPI_FILTER (filter);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
-  GstFlowReturn ret = GST_FLOW_ERROR;
+  GstFlowReturn ret = GST_FLOW_OK;
   GstMeta *meta = NULL;
   VPIImage in_image;
   VPIImage out_image;
@@ -107,6 +107,11 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   if (meta) {
     ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
+
+    if (GST_FLOW_OK != ret) {
+      GST_ERROR_OBJECT (self, "Child element processing failed.");
+    }
+
   } else {
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not contain the CUDA meta");

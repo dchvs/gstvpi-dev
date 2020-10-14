@@ -250,7 +250,7 @@ gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
 
-  GST_DEBUG_OBJECT (self, "Proposing upstream allocation");
+  GST_INFO_OBJECT (self, "Proposing upstream allocation");
   if (!self->upstream_buffer_pool) {
     self->upstream_buffer_pool = g_object_new (GST_CUDA_TYPE_BUFFER_POOL, NULL);
   }
@@ -266,11 +266,9 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstMeta *meta = NULL;
 
-  GST_DEBUG_OBJECT (self, "transform_ip");
-
   meta = gst_buffer_get_meta (buf, GST_CUDA_META_API_TYPE);
   if (meta) {
-    GST_DEBUG_OBJECT (self, "Received buffer through proposed allocation.");
+    GST_LOG_OBJECT (self, "Received buffer through proposed allocation.");
   } else {
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not use the proposed allocation.");
@@ -285,7 +283,7 @@ gst_vpi_upload_finalize (GObject * object)
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (object);
 
-  GST_DEBUG_OBJECT (self, "finalize");
+  GST_DEBUG_OBJECT (self, "Freeing resources");
 
   g_clear_object (&self->upstream_buffer_pool);
 

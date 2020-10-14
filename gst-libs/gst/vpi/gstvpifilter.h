@@ -15,6 +15,7 @@
 
 #include <gst/video/gstvideofilter.h>
 #include <gst/video/video.h>
+
 #include <vpi/Image.h>
 
 G_BEGIN_DECLS
@@ -27,8 +28,8 @@ struct _GstVpiFilterClass
 {
   GstVideoFilterClass parent_class;
 
-  GstFlowReturn (*transform_image) (GstVpiFilter *self, 
-      VPIImage *in_image, VPIImage *out_image);
+  GstFlowReturn (*transform_image) (GstVpiFilter *self, VPIImage *in_image,
+                                    VPIImage *out_image);
 };
 
 G_END_DECLS

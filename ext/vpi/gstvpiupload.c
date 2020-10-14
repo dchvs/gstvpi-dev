@@ -107,24 +107,23 @@ static GstCaps *
 gst_vpi_upload_transform_downstream_caps (GstVpiUpload * self,
     GstCaps * caps_src)
 {
-  GstCaps *ret = NULL;
   GstCapsFeatures *vpiimage_feature = NULL;
   gint i = 0;
 
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  ret = gst_caps_copy (caps_src);
   vpiimage_feature = gst_caps_features_from_string ("memory:VPIImage");
 
-  for (i = 0; i < gst_caps_get_size (ret); i++) {
+  for (i = 0; i < gst_caps_get_size (caps_src); i++) {
     /* Add VPIImage to all structures */
-    gst_caps_set_features (ret, i, gst_caps_features_copy (vpiimage_feature));
+    gst_caps_set_features (caps_src, i,
+        gst_caps_features_copy (vpiimage_feature));
   }
 
   gst_caps_features_free (vpiimage_feature);
 
-  return ret;
+  return caps_src;
 }
 
 static GstCaps *
@@ -166,6 +165,7 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
   } else {
     /* unknown direction */
     GST_ERROR_OBJECT (self, "Cannot transform caps of unknown GstPadDirection");
+    gst_caps_unref (given_caps);
     goto out;
   }
 

@@ -30,7 +30,7 @@ gst_video_dep = dependency('gstreamer-video-1.0',version : gst_req)
 cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
 
 c = meson.get_compiler('c')
-vpi_dep = c.find_library('nvvpi')
+vpi_dep = c.find_library('nvvpi', required:true)
 
 ## Dependencies
 # Define plugin dependencies

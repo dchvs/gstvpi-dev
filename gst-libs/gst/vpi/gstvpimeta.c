@@ -51,9 +51,9 @@ gst_vpi_meta_get_info (void)
 GstVpiMeta *
 gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 {
-  GstVpiMeta *meta = NULL;
+  GstVpiMeta *ret = NULL;
   GstMapInfo minfo;
-  VPIImageData vpi_imgdata;
+  VPIImageData vpi_image_data;
   VPIStatus status;
 
   g_return_val_if_fail (buffer != NULL, NULL);
@@ -61,24 +61,32 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 
   GST_LOG ("Adding VPI meta to buffer %p", buffer);
 
-  gst_buffer_map (buffer, &minfo, GST_MAP_READ);
+  gst_buffer_map (buffer, &minfo, GST_MAP_READWRITE);
 
-  meta = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
+  ret = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
 
-  memset (&(vpi_imgdata), 0, sizeof (vpi_imgdata));
-  vpi_imgdata.type = VPI_IMAGE_TYPE_U8;
-  vpi_imgdata.numPlanes = 1;
-  vpi_imgdata.planes[0].width = GST_VIDEO_INFO_WIDTH (video_info);
-  vpi_imgdata.planes[0].height = GST_VIDEO_INFO_HEIGHT (video_info);
-  vpi_imgdata.planes[0].rowStride = video_info->stride[0];
-  vpi_imgdata.planes[0].data = minfo.data;
+  memset (&(vpi_image_data), 0, sizeof (vpi_image_data));
+  vpi_image_data.type = VPI_IMAGE_TYPE_RGB8;
+  vpi_image_data.numPlanes = GST_VIDEO_INFO_N_PLANES (video_info);
+  for (int i = 0; i < vpi_image_data.numPlanes; i++) {
+    vpi_image_data.planes[i].width =
+        GST_VIDEO_SUB_SCALE (video_info->finfo->w_sub[i],
+        GST_VIDEO_INFO_WIDTH (video_info));
+    vpi_image_data.planes[i].height =
+        GST_VIDEO_SUB_SCALE (video_info->finfo->h_sub[i],
+        GST_VIDEO_INFO_HEIGHT (video_info));
+    vpi_image_data.planes[i].rowStride =
+        GST_VIDEO_INFO_PLANE_STRIDE (video_info, i);
+    vpi_image_data.planes[i].data =
+        minfo.data + GST_VIDEO_INFO_PLANE_OFFSET (video_info, i);
+  }
 
-  status = vpiImageWrapCudaDeviceMem (&vpi_imgdata, 0, &(meta->vpi_image));
+  status = vpiImageWrapCudaDeviceMem (&vpi_image_data, 0, &(ret->vpi_image));
   if (status != VPI_SUCCESS) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
   }
 
-  return meta;
+  return ret;
 }
 
 static gboolean

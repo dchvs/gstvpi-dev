@@ -29,8 +29,8 @@ struct _GstVpiUndistort
 };
 
 /* prototypes */
-static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter * filter,
-    VPIImage * in_image, VPIImage * out_image);
+static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter *
+    filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
 static void gst_vpi_undistort_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_undistort_get_property (GObject * object,
@@ -80,8 +80,8 @@ gst_vpi_undistort_init (GstVpiUndistort * vpi_undistort)
 }
 
 static GstFlowReturn
-gst_vpi_undistort_transform_image (GstVpiFilter * filter,
-    VPIImage * in_image, VPIImage * out_image)
+gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
+    VPIImage in_image, VPIImage out_image)
 {
   GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
   GstFlowReturn ret = GST_FLOW_OK;

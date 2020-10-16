@@ -14,9 +14,11 @@
 #include "config.h"
 #endif
 
+#include "gstvpigaussianfilter.h"
+
 #include <gst/gst.h>
 
-#include "gstvpigaussianfilter.h"
+#include <vpi/algo/GaussianImageFilter.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_gaussian_filter_debug_category
@@ -29,6 +31,8 @@ struct _GstVpiGaussianFilter
 };
 
 /* prototypes */
+static GstFlowReturn gst_vpi_gaussian_filter_transform_image (GstVpiFilter *
+    filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
 static void gst_vpi_gaussian_filter_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_gaussian_filter_get_property (GObject * object,
@@ -52,6 +56,7 @@ static void
 gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_CLASS (klass);
 
   gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
@@ -65,6 +70,8 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
       "VPI Gaussian filter element for grayscale images.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
+  vpi_filter_class->transform_image =
+      GST_DEBUG_FUNCPTR (gst_vpi_gaussian_filter_transform_image);
   gobject_class->set_property = gst_vpi_gaussian_filter_set_property;
   gobject_class->get_property = gst_vpi_gaussian_filter_get_property;
   gobject_class->finalize = gst_vpi_gaussian_filter_finalize;
@@ -73,6 +80,28 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
 static void
 gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * vpi_gaussian_filter)
 {
+}
+
+static GstFlowReturn
+gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
+    VPIStream stream, VPIImage in_image, VPIImage out_image)
+{
+  GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (filter);
+  GstFlowReturn ret = GST_FLOW_ERROR;
+  VPIStatus status = VPI_SUCCESS;
+  const gint kernel_size = 7;
+  const gint sigma = 1.7;
+
+  GST_LOG_OBJECT (self, "Transform image");
+
+  status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
+      kernel_size, kernel_size, sigma, sigma, VPI_BOUNDARY_COND_ZERO);
+
+  if (VPI_SUCCESS != status) {
+    ret = GST_FLOW_ERROR;
+  }
+
+  return ret;
 }
 
 void

@@ -14,9 +14,11 @@
 #include "config.h"
 #endif
 
+#include "gstvpifilter.h"
+
 #include "gstcudabufferpool.h"
 #include "gstcudameta.h"
-#include "gstvpifilter.h"
+#include "gstvpimeta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_filter_debug_category
@@ -26,6 +28,7 @@ typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 struct _GstVpiFilterPrivate
 {
   GstCudaBufferPool *downstream_buffer_pool;
+  VPIStream stream;
 };
 
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
@@ -71,6 +74,7 @@ gst_vpi_filter_init (GstVpiFilter * self)
       GstVpiFilterPrivate);
 
   priv->downstream_buffer_pool = NULL;
+  vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->stream);
 }
 
 static gboolean
@@ -96,27 +100,39 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 {
   GstVpiFilter *self = GST_VPI_FILTER (filter);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  GstVpiFilterPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
+      GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
+  GstVpiMeta *in_vpi_meta = NULL;
+  GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  GstMeta *meta = NULL;
-  VPIImage in_image;
-  VPIImage out_image;
 
-  GST_DEBUG_OBJECT (filter, "Transform frame");
+  GST_LOG_OBJECT (filter, "Transform frame");
 
   g_return_val_if_fail (filter != NULL, GST_FLOW_ERROR);
+  g_return_val_if_fail (inframe != NULL, GST_FLOW_ERROR);
+  g_return_val_if_fail (outframe != NULL, GST_FLOW_ERROR);
 
-  meta = gst_buffer_get_meta (inframe->buffer, GST_CUDA_META_API_TYPE);
+  in_vpi_meta =
+      ((GstVpiMeta *) gst_buffer_get_meta (inframe->buffer,
+          GST_VPI_META_API_TYPE));
+  out_vpi_meta =
+      ((GstVpiMeta *) gst_buffer_get_meta (outframe->buffer,
+          GST_VPI_META_API_TYPE));
 
-  if (meta) {
-    ret = vpi_filter_class->transform_image (self, &in_image, &out_image);
+  if (in_vpi_meta && out_vpi_meta) {
+
+    ret = vpi_filter_class->transform_image (self, priv->stream,
+        in_vpi_meta->vpi_image, out_vpi_meta->vpi_image);
+
+    vpiStreamSync (priv->stream);
 
     if (GST_FLOW_OK != ret) {
-      GST_ERROR_OBJECT (self, "Child element processing failed.");
+      GST_ERROR_OBJECT (self, "Child element processing failed");
     }
 
   } else {
     GST_ERROR_OBJECT (self,
-        "Cannot process buffers that do not contain the CUDA meta");
+        "Cannot process buffers that do not contain the VPI meta");
   }
 
   return ret;

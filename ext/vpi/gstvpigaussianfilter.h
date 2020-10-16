@@ -18,7 +18,7 @@
 G_BEGIN_DECLS
 
 #define GST_TYPE_VPI_GAUSSIAN_FILTER (gst_vpi_gaussian_filter_get_type())
-G_DECLARE_FINAL_TYPE (GstVpiGaussianFilter, gst_vpi_gaussian_filter, GST, 
+G_DECLARE_FINAL_TYPE (GstVpiGaussianFilter, gst_vpi_gaussian_filter, GST,
     VPI_GAUSSIAN_FILTER, GstVpiFilter)
 
 G_END_DECLS

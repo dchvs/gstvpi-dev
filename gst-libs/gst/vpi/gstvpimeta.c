@@ -18,6 +18,19 @@ static gboolean gst_vpi_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
 static void gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer);
 
+/**
+ * GstVpiMeta:
+ * @meta: parent #GstMeta
+ *
+ * Extra buffer metadata, wraping UM pointer in VPIImage.
+ */
+struct _GstVpiMeta
+{
+  GstMeta meta;
+
+  VPIImage vpi_image;
+};
+
 GType
 gst_vpi_meta_api_get_type (void)
 {

@@ -12,8 +12,6 @@
 
 #include "gstvpimeta.h"
 
-#include <gst/video/video.h>
-
 static gboolean gst_vpi_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
 static void gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer);

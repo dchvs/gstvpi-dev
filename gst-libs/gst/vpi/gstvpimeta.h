@@ -13,9 +13,8 @@
 #ifndef __GST_VPI_META_H__
 #define __GST_VPI_META_H__
 
-#include <gst/gst.h>
-#include <vpi/Image.h>
 #include <gst/video/video.h>
+#include <vpi/Image.h>
 
 G_BEGIN_DECLS 
 

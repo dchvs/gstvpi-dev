@@ -25,9 +25,16 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_BE, GRAY16_LE }")
 
+#define DEFAULT_PROP_SIZE_MIN 3
+#define DEFAULT_PROP_SIZE_MAX 11
+
+#define DEFAULT_PROP_SIZE 7
+
 struct _GstVpiGaussianFilter
 {
   GstVpiFilter parent;
+  gint size_x;
+  gint size_y;
 };
 
 /* prototypes */
@@ -41,7 +48,9 @@ static void gst_vpi_gaussian_filter_finalize (GObject * object);
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_SIZE_X,
+  PROP_SIZE_Y
 };
 
 /* class initialization */
@@ -75,11 +84,27 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
   gobject_class->set_property = gst_vpi_gaussian_filter_set_property;
   gobject_class->get_property = gst_vpi_gaussian_filter_get_property;
   gobject_class->finalize = gst_vpi_gaussian_filter_finalize;
+
+  g_object_class_install_property (gobject_class, PROP_SIZE_X,
+      g_param_spec_int ("size-x", "Kernel size X",
+          "Gaussian kernel size in X direction. "
+          "Must be between 3 and 11, and odd",
+          DEFAULT_PROP_SIZE_MIN, DEFAULT_PROP_SIZE_MAX, DEFAULT_PROP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SIZE_Y,
+      g_param_spec_int ("size-y", "Kernel size Y",
+          "Gaussian kernel size in Y direction. "
+          "Must be between 3 and 11, and odd",
+          DEFAULT_PROP_SIZE_MIN, DEFAULT_PROP_SIZE_MAX, DEFAULT_PROP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
-gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * vpi_gaussian_filter)
+gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * self)
 {
+  self->size_x = DEFAULT_PROP_SIZE;
+  self->size_y = DEFAULT_PROP_SIZE;
 }
 
 static GstFlowReturn
@@ -90,7 +115,6 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
   const gdouble sigma = 1.7;
-  const gint kernel_size = 7;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -102,7 +126,7 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   GST_LOG_OBJECT (self, "Transform image");
 
   status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
-      kernel_size, kernel_size, sigma, sigma, VPI_BOUNDARY_COND_ZERO);
+      self->size_x, self->size_y, sigma, sigma, VPI_BOUNDARY_COND_ZERO);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -115,11 +139,17 @@ void
 gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstVpiGaussianFilter *vpi_gaussian_filter = GST_VPI_GAUSSIAN_FILTER (object);
+  GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (object);
 
-  GST_DEBUG_OBJECT (vpi_gaussian_filter, "set_property");
+  GST_DEBUG_OBJECT (self, "set_property");
 
   switch (property_id) {
+    case PROP_SIZE_X:
+      self->size_x = g_value_get_int (value);
+      break;
+    case PROP_SIZE_Y:
+      self->size_y = g_value_get_int (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -130,11 +160,17 @@ void
 gst_vpi_gaussian_filter_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstVpiGaussianFilter *vpi_gaussian_filter = GST_VPI_GAUSSIAN_FILTER (object);
+  GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (object);
 
-  GST_DEBUG_OBJECT (vpi_gaussian_filter, "get_property");
+  GST_DEBUG_OBJECT (self, "get_property");
 
   switch (property_id) {
+    case PROP_SIZE_X:
+      g_value_set_int (value, self->size_x);
+      break;
+    case PROP_SIZE_Y:
+      g_value_set_int (value, self->size_y);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;

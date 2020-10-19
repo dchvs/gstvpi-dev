@@ -84,6 +84,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   status = vpiImageWrapCudaDeviceMem (&vpi_image_data, 0, &(ret->vpi_image));
   if (status != VPI_SUCCESS) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
+    ret = NULL;
   }
 
   return ret;

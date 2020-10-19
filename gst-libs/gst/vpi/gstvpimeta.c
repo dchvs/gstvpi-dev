@@ -12,6 +12,8 @@
 
 #include "gstvpimeta.h"
 
+#include "gstvpi.h"
+
 static gboolean gst_vpi_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
 static void gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer);
@@ -77,7 +79,8 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   ret = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
 
   memset (&(vpi_image_data), 0, sizeof (vpi_image_data));
-  vpi_image_data.type = VPI_IMAGE_TYPE_RGB8;
+  vpi_image_data.type =
+      gst_vpi_video_format_to_image_type (GST_VIDEO_INFO_FORMAT (video_info));
   vpi_image_data.numPlanes = GST_VIDEO_INFO_N_PLANES (video_info);
   for (int i = 0; i < vpi_image_data.numPlanes; i++) {
     vpi_image_data.planes[i].width =

@@ -14,9 +14,9 @@
 
 static const gchar *test_pipes[] = {
   "videotestsrc ! vpiupload name=upload ! capsfilter caps=video/x-raw(memory:VPIImage) ! fakesink",
-  "fakesrc ! capsfilter caps=video/x-raw,width=1280,height=720,format=I420,framerate=30/1 ! vpiupload ! capsfilter caps=video/x-raw(memory:VPIImage) ! fakesink",
+  "fakesrc ! capsfilter caps=video/x-raw,width=1280,height=720,framerate=30/1 ! vpiupload ! capsfilter caps=video/x-raw(memory:VPIImage) ! fakesink",
   "videotestsrc ! vpiupload ! capsfilter caps=video/x-raw ! fakesink",
-  "videotestsrc ! capsfilter caps=video/x-raw,width=1280,height=720,format=I420,framerate=30/1 ! vpiupload ! capsfilter caps=video/x-raw(memory:VPIImage),width=640,height=480 ! fakesink",
+  "videotestsrc ! capsfilter caps=video/x-raw,width=1280,height=720,framerate=30/1 ! vpiupload ! capsfilter caps=video/x-raw(memory:VPIImage),width=640,height=480 ! fakesink",
   NULL,
 };
 

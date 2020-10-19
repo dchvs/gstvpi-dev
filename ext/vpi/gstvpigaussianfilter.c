@@ -87,10 +87,10 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
     VPIStream stream, VPIImage in_image, VPIImage out_image)
 {
   GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (filter);
-  GstFlowReturn ret = GST_FLOW_ERROR;
+  GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  const gdouble sigma = 1.7;
   const gint kernel_size = 7;
-  const gint sigma = 1.7;
 
   GST_LOG_OBJECT (self, "Transform image");
 

@@ -16,6 +16,8 @@
 #include <gst/video/gstvideofilter.h>
 #include <gst/video/video.h>
 
+#include <vpi/Image.h>
+
 G_BEGIN_DECLS
 
 #define GST_TYPE_VPI_FILTER   (gst_vpi_filter_get_type())
@@ -24,7 +26,10 @@ G_DECLARE_DERIVABLE_TYPE (GstVpiFilter, gst_vpi_filter, GST,
 
 struct _GstVpiFilterClass
 {
-  GstVideoFilterClass base_vpi_filter_class;
+  GstVideoFilterClass parent_class;
+
+  GstFlowReturn (*transform_image) (GstVpiFilter *self, VPIImage *in_image,
+                                    VPIImage *out_image);
 };
 
 G_END_DECLS

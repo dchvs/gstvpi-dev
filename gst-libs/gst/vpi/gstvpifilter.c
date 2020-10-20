@@ -108,9 +108,9 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   GST_LOG_OBJECT (filter, "Transform frame");
 
-  g_return_val_if_fail (filter != NULL, GST_FLOW_ERROR);
-  g_return_val_if_fail (inframe != NULL, GST_FLOW_ERROR);
-  g_return_val_if_fail (outframe != NULL, GST_FLOW_ERROR);
+  g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
+  g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);
+  g_return_val_if_fail (NULL != outframe, GST_FLOW_ERROR);
 
   in_vpi_meta =
       ((GstVpiMeta *) gst_buffer_get_meta (inframe->buffer,

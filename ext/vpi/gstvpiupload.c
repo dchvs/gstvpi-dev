@@ -157,10 +157,10 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 
   given_caps = gst_caps_copy (caps);
 
-  if (direction == GST_PAD_SRC) {
+  if (GST_PAD_SRC == direction) {
     /* transform caps going upstream */
     ret = gst_vpi_upload_transform_upstream_caps (self, given_caps);
-  } else if (direction == GST_PAD_SINK) {
+  } else if (GST_PAD_SINK == direction) {
     /* transform caps going downstream */
     ret = gst_vpi_upload_transform_downstream_caps (self, given_caps);
   } else {

@@ -88,8 +88,8 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
 
   GST_LOG_OBJECT (self, "Transform image");
 
-  g_return_val_if_fail (in_image != NULL, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_image != NULL, GST_FLOW_ERROR);
+  g_return_val_if_fail (NULL != in_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (NULL != out_image, GST_FLOW_ERROR);
 
   /* TODO: Call to undistort function */
 

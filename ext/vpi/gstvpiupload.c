@@ -24,8 +24,9 @@
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category
 
-#define VIDEO_CAPS GST_VIDEO_CAPS_MAKE(GST_VIDEO_FORMATS_ALL)
-#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:VPIImage", GST_VIDEO_FORMATS_ALL)
+#define VPI_SUPPORTED_FORMATS "{ GRAY8, GRAY16_BE, GRAY16_LE, NV12, RGB, RGBA, BGR, BGRA }"
+#define VIDEO_CAPS GST_VIDEO_CAPS_MAKE(VPI_SUPPORTED_FORMATS)
+#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:VPIImage", VPI_SUPPORTED_FORMATS)
 
 struct _GstVpiUpload
 {
@@ -107,26 +108,23 @@ static GstCaps *
 gst_vpi_upload_transform_downstream_caps (GstVpiUpload * self,
     GstCaps * caps_src)
 {
-  GstCaps *vpiimage = NULL;
   GstCapsFeatures *vpiimage_feature = NULL;
   gint i = 0;
 
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  vpiimage = gst_caps_copy (caps_src);
   vpiimage_feature = gst_caps_features_from_string ("memory:VPIImage");
 
-  for (i = 0; i < gst_caps_get_size (vpiimage); i++) {
-
+  for (i = 0; i < gst_caps_get_size (caps_src); i++) {
     /* Add VPIImage to all structures */
-    gst_caps_set_features (vpiimage, i,
+    gst_caps_set_features (caps_src, i,
         gst_caps_features_copy (vpiimage_feature));
   }
 
   gst_caps_features_free (vpiimage_feature);
 
-  return vpiimage;
+  return caps_src;
 }
 
 static GstCaps *
@@ -151,7 +149,7 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
   GstCaps *given_caps = NULL;
-  GstCaps *result = NULL;
+  GstCaps *ret = NULL;
 
   GST_DEBUG_OBJECT (self, "Transforming caps on %s:caps: %"
       GST_PTR_FORMAT "filter: %" GST_PTR_FORMAT,
@@ -161,27 +159,27 @@ gst_vpi_upload_transform_caps (GstBaseTransform * trans,
 
   if (direction == GST_PAD_SRC) {
     /* transform caps going upstream */
-    result = gst_vpi_upload_transform_upstream_caps (self, given_caps);
+    ret = gst_vpi_upload_transform_upstream_caps (self, given_caps);
   } else if (direction == GST_PAD_SINK) {
     /* transform caps going downstream */
-    result = gst_vpi_upload_transform_downstream_caps (self, given_caps);
+    ret = gst_vpi_upload_transform_downstream_caps (self, given_caps);
   } else {
     /* unknown direction */
-    GST_ERROR_OBJECT (trans,
-        "Cannot transform caps of unknown GstPadDirection");
+    GST_ERROR_OBJECT (self, "Cannot transform caps of unknown GstPadDirection");
+    gst_caps_unref (given_caps);
     goto out;
   }
 
   if (filter) {
-    GstCaps *tmp = result;
-    result = gst_caps_intersect (filter, result);
+    GstCaps *tmp = ret;
+    ret = gst_caps_intersect (filter, ret);
     gst_caps_unref (tmp);
   }
 
 out:
-  GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, result);
+  GST_DEBUG_OBJECT (self, "Transformed caps: %" GST_PTR_FORMAT, ret);
 
-  return result;
+  return ret;
 }
 
 static gboolean
@@ -189,47 +187,24 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
     GstCaps * outcaps)
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
-  gboolean status = FALSE;
+  gboolean ret = FALSE;
 
-  GST_INFO_OBJECT (self, "set_caps");
-
-  status = gst_video_info_from_caps (&self->in_caps_info, incaps);
-  if (!status) {
-    GST_ERROR ("Unable to get the input caps");
+  ret = gst_video_info_from_caps (&self->in_caps_info, incaps);
+  if (!ret) {
+    GST_ERROR_OBJECT (self, "Unable to get the input caps");
     goto out;
   }
 
-  status = gst_video_info_from_caps (&self->out_caps_info, outcaps);
-  if (!status) {
-    GST_ERROR ("Unable to get the output caps");
+  ret = gst_video_info_from_caps (&self->out_caps_info, outcaps);
+  if (!ret) {
+    GST_ERROR_OBJECT (self, "Unable to get the output caps");
     goto out;
   }
 
-  status = TRUE;
+  ret = TRUE;
 
 out:
-  return status;
-}
-
-static gsize
-gst_cuda_base_filter_compute_size (GstVpiUpload * self, GstVideoInfo * info)
-{
-  gsize size = 0;
-
-  g_return_val_if_fail (self, 0);
-  g_return_val_if_fail (info, 0);
-
-  if (info->size) {
-    size = info->size;
-  } else {
-    size = (info->stride[0] * info->height) +
-        (info->stride[1] * info->height / 2) +
-        (info->stride[2] * info->height / 2);
-  }
-
-  GST_LOG_OBJECT (self, "Computed buffer size of %" G_GUINT64_FORMAT, size);
-
-  return size;
+  return ret;
 }
 
 static gboolean
@@ -248,7 +223,7 @@ gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
   gst_query_parse_allocation (query, &caps, &need_pool);
 
   pool = GST_BUFFER_POOL (buffer_pool);
-  size = gst_cuda_base_filter_compute_size (self, &self->in_caps_info);
+  size = self->in_caps_info.size;
 
   config = gst_buffer_pool_get_config (pool);
   gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
@@ -276,15 +251,13 @@ gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (trans);
 
-  GST_DEBUG_OBJECT (self, "Proposing upstream allocation");
+  GST_INFO_OBJECT (self, "Proposing upstream allocation");
   if (!self->upstream_buffer_pool) {
     self->upstream_buffer_pool = g_object_new (GST_CUDA_TYPE_BUFFER_POOL, NULL);
   }
 
   return gst_vpi_upload_create_buffer_pool (self,
       self->upstream_buffer_pool, query);
-
-  return TRUE;
 }
 
 static GstFlowReturn
@@ -294,19 +267,15 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstMeta *meta = NULL;
 
-  GST_DEBUG_OBJECT (self, "transform_ip");
-
   meta = gst_buffer_get_meta (buf, GST_CUDA_META_API_TYPE);
   if (meta) {
-    GST_DEBUG_OBJECT (self, "Received buffer through proposed allocation.");
+    GST_LOG_OBJECT (self, "Received buffer through proposed allocation.");
   } else {
     GST_ERROR_OBJECT (self,
         "Cannot process buffers that do not use the proposed allocation.");
     ret = GST_FLOW_ERROR;
-    goto out;
   }
 
-out:
   return ret;
 }
 
@@ -315,7 +284,7 @@ gst_vpi_upload_finalize (GObject * object)
 {
   GstVpiUpload *self = GST_VPI_UPLOAD (object);
 
-  GST_DEBUG_OBJECT (self, "finalize");
+  GST_DEBUG_OBJECT (self, "Freeing resources");
 
   g_clear_object (&self->upstream_buffer_pool);
 

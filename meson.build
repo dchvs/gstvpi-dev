@@ -28,13 +28,13 @@ gst_base_dep  = dependency('gstreamer-base-1.0', version : gst_req)
 gst_check_dep = dependency('gstreamer-check-1.0',version : gst_req)
 gst_video_dep = dependency('gstreamer-video-1.0',version : gst_req)
 cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
-mult_api_dep = declare_dependency(
-    include_directories : include_directories('/usr/src/jetson_multimedia_api/include/'),
-)
+
+c = meson.get_compiler('c')
+vpi_dep = c.find_library('nvvpi', required:true)
 
 ## Dependencies
 # Define plugin dependencies
-plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, mult_api_dep]
+plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, vpi_dep]
 # Examples dependencies
 example_deps = [gst_dep, gst_base_dep]
 # Define test dependencies

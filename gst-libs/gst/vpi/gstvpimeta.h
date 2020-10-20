@@ -24,6 +24,19 @@ G_BEGIN_DECLS
 typedef struct _GstVpiMeta GstVpiMeta;
 
 /**
+ * GstVpiMeta:
+ * @meta: parent #GstMeta
+ *
+ * Extra buffer metadata, wraping UM pointer in VPIImage.
+ */
+struct _GstVpiMeta
+{
+  GstMeta meta;
+
+  VPIImage vpi_image;
+};
+
+/**
  * gst_buffer_add_vpi_meta
  * @buffer: (in) (transfer none) a #GstBuffer
  * @video_info: (in) (transfer none) a #GstVideoInfo

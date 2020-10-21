@@ -13,9 +13,9 @@
 #ifndef __GST_CUDA_BUFFER_POOL_H__
 #define __GST_CUDA_BUFFER_POOL_H__
 
-#include <gst/gst.h>
+#include <gst/video/video.h>
 
-G_BEGIN_DECLS 
+G_BEGIN_DECLS
 
 #define GST_CUDA_TYPE_BUFFER_POOL gst_cuda_buffer_pool_get_type ()
 
@@ -24,7 +24,12 @@ G_BEGIN_DECLS
  *
  * The opaque #GstCudaBufferPool data structure.
  */
-G_DECLARE_FINAL_TYPE(GstCudaBufferPool, gst_cuda_buffer_pool, GST_CUDA, BUFFER_POOL, GstBufferPool);
+G_DECLARE_DERIVABLE_TYPE(GstCudaBufferPool, gst_cuda_buffer_pool, GST_CUDA, BUFFER_POOL, GstBufferPool);
+
+struct _GstCudaBufferPoolClass
+{
+  GstBufferPoolClass parent_class;
+};
 
 G_END_DECLS
 

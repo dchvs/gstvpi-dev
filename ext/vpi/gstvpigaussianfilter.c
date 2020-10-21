@@ -86,13 +86,20 @@ static GstFlowReturn
 gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
     VPIStream stream, VPIImage in_image, VPIImage out_image)
 {
-  GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (filter);
+  GstVpiGaussianFilter *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
   const gdouble sigma = 1.7;
   const gint kernel_size = 7;
 
   GST_LOG_OBJECT (self, "Transform image");
+
+  g_return_val_if_fail (filter, GST_FLOW_ERROR);
+  g_return_val_if_fail (stream, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_image, GST_FLOW_ERROR);
+
+  self = GST_VPI_GAUSSIAN_FILTER (filter);
 
   status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
       kernel_size, kernel_size, sigma, sigma, VPI_BOUNDARY_COND_ZERO);

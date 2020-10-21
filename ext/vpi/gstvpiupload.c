@@ -18,7 +18,7 @@
 
 #include <gst/video/video.h>
 
-#include "gst-libs/gst/vpi/gstcudabufferpool.h"
+#include "gst-libs/gst/vpi/gstvpibufferpool.h"
 #include "gst-libs/gst/vpi/gstcudameta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
@@ -33,7 +33,7 @@ struct _GstVpiUpload
   GstBaseTransform parent;
   GstVideoInfo out_caps_info;
   GstVideoInfo in_caps_info;
-  GstCudaBufferPool *upstream_buffer_pool;
+  GstVpiBufferPool *upstream_buffer_pool;
 };
 
 /* prototypes */
@@ -209,7 +209,7 @@ out:
 
 static gboolean
 gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
-    GstCudaBufferPool * buffer_pool, GstQuery * query)
+    GstVpiBufferPool * buffer_pool, GstQuery * query)
 {
   gsize size = 0;
   GstStructure *config = NULL;
@@ -253,7 +253,7 @@ gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
 
   GST_INFO_OBJECT (self, "Proposing upstream allocation");
   if (!self->upstream_buffer_pool) {
-    self->upstream_buffer_pool = g_object_new (GST_CUDA_TYPE_BUFFER_POOL, NULL);
+    self->upstream_buffer_pool = g_object_new (GST_VPI_TYPE_BUFFER_POOL, NULL);
   }
 
   return gst_vpi_upload_create_buffer_pool (self,

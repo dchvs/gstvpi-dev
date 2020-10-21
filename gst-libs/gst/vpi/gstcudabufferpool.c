@@ -92,28 +92,28 @@ gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 
   if (!gst_buffer_pool_config_get_params (config, &caps, &size, &min_buffers,
           &max_buffers)) {
-    GST_ERROR_OBJECT (priv, "Error getting parameters from buffer pool config");
+    GST_ERROR_OBJECT (self, "Error getting parameters from buffer pool config");
     goto error;
   }
 
   if (NULL == caps) {
-    GST_ERROR_OBJECT (priv, "Requested buffer pool configuration without caps");
+    GST_ERROR_OBJECT (self, "Requested buffer pool configuration without caps");
     goto error;
   }
 
   if (!gst_video_info_from_caps (&priv->caps_info, caps)) {
-    GST_ERROR_OBJECT (priv, "Unable to parse caps info");
+    GST_ERROR_OBJECT (self, "Unable to parse caps info");
     goto error;
   }
 
-  GST_DEBUG_OBJECT (priv,
+  GST_DEBUG_OBJECT (self,
       "Setting CUDA pool configuration with caps %" GST_PTR_FORMAT
       " and size %lu", caps, priv->caps_info.size);
 
   priv->needs_video_meta =
       gst_buffer_pool_config_has_option (config,
       GST_BUFFER_POOL_OPTION_VIDEO_META);
-  GST_DEBUG_OBJECT (priv, "The client needs video meta: %s",
+  GST_DEBUG_OBJECT (self, "The client needs video meta: %s",
       priv->needs_video_meta ? "TRUE" : "FALSE");
 
   return
@@ -136,13 +136,13 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
   GstBuffer *outbuf = NULL;
   GstMemory *outmem = NULL;
 
-  GST_DEBUG_OBJECT (priv, "Allocating cuda buffer");
+  GST_DEBUG_OBJECT (self, "Allocating cuda buffer");
 
   outmem =
       gst_allocator_alloc (GST_ALLOCATOR (priv->allocator),
       priv->caps_info.size, NULL);
   if (!outmem) {
-    GST_ERROR_OBJECT (pool, "Unable to allocate CUDA buffer");
+    GST_ERROR_OBJECT (self, "Unable to allocate CUDA buffer");
     goto out;
   }
 
@@ -175,7 +175,7 @@ gst_cuda_buffer_pool_finalize (GObject * object)
       G_TYPE_INSTANCE_GET_PRIVATE (self, GST_CUDA_TYPE_BUFFER_POOL,
       GstCudaBufferPoolPrivate);
 
-  GST_DEBUG_OBJECT (priv, "Finalizing CUDA buffer pool");
+  GST_DEBUG_OBJECT (self, "Finalizing CUDA buffer pool");
 
   g_clear_object (&priv->allocator);
 

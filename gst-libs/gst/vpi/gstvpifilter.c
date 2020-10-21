@@ -87,7 +87,8 @@ gst_vpi_filter_start (GstBaseTransform * trans)
   GST_DEBUG_OBJECT (self, "start");
 
   if (!vpi_filter_class->transform_image) {
-    GST_ERROR_OBJECT (self, "Subclass did not implement transform_image()");
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Subclass did not implement transform_image()."), (NULL));
     ret = FALSE;
   }
 
@@ -127,12 +128,13 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     vpiStreamSync (priv->stream);
 
     if (GST_FLOW_OK != ret) {
-      GST_ERROR_OBJECT (self, "Child element processing failed");
+      GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+          ("Child VPI element processing failed."), (NULL));
     }
 
   } else {
-    GST_ERROR_OBJECT (self,
-        "Cannot process buffers that do not contain the VPI meta");
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Cannot process buffers that do not contain the VPI meta."), (NULL));
   }
 
   return ret;
@@ -182,7 +184,8 @@ gst_vpi_filter_create_buffer_pool (GstVpiFilter * self,
   gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
 
   if (!gst_buffer_pool_set_config (pool, config)) {
-    GST_ERROR_OBJECT (self, "Unable to set pool configuration");
+    GST_ELEMENT_ERROR (self, RESOURCE, FAILED,
+        ("Unable to set pool configuration."), (NULL));
     goto out;
   }
 

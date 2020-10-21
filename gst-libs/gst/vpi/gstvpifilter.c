@@ -18,8 +18,8 @@
 
 #include <cuda_runtime.h>
 
-#include "gstcudabufferpool.h"
 #include "gstcudameta.h"
+#include "gstvpibufferpool.h"
 #include "gstvpimeta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_filter_debug_category);
@@ -29,7 +29,7 @@ typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 
 struct _GstVpiFilterPrivate
 {
-  GstCudaBufferPool *downstream_buffer_pool;
+  GstVpiBufferPool *downstream_buffer_pool;
   VPIStream vpi_stream;
   cudaStream_t cuda_stream;
 };
@@ -278,7 +278,7 @@ gst_vpi_filter_compute_size (GstVpiFilter * self, GstVideoInfo * info)
 
 static gboolean
 gst_vpi_filter_create_buffer_pool (GstVpiFilter * self,
-    GstCudaBufferPool * buffer_pool, GstQuery * query)
+    GstVpiBufferPool * buffer_pool, GstQuery * query)
 {
   GstVideoFilter *video_filter = GST_VIDEO_FILTER (self);
   gsize size = 0;
@@ -327,7 +327,7 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
 
   if (!priv->downstream_buffer_pool) {
     priv->downstream_buffer_pool =
-        g_object_new (GST_CUDA_TYPE_BUFFER_POOL, NULL);
+        g_object_new (GST_VPI_TYPE_BUFFER_POOL, NULL);
   }
 
   /* We can't use dowstream provided pools, since we need unified memory */

@@ -97,7 +97,7 @@ gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   }
 
   if (NULL == caps) {
-    GST_ERROR_OBJECT (self, "Requested buffer pool configuration without caps");
+    GST_ERROR_OBJECT (self, "No caps on the buffer pool configuration");
     goto error;
   }
 

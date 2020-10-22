@@ -241,5 +241,11 @@ gst_vpi_filter_finalize (GObject * object)
 
   g_clear_object (&priv->downstream_buffer_pool);
 
+  if (NULL != priv->stream) {
+    vpiStreamSync (priv->stream);
+    vpiStreamDestroy (priv->stream);
+    priv->stream = NULL;
+  }
+
   G_OBJECT_CLASS (gst_vpi_filter_parent_class)->finalize (object);
 }

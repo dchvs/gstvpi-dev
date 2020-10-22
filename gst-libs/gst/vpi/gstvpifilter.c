@@ -99,19 +99,24 @@ static GstFlowReturn
 gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe)
 {
-  GstVpiFilter *self = GST_VPI_FILTER (filter);
-  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
-  GstVpiFilterPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-      GST_TYPE_VPI_FILTER, GstVpiFilterPrivate);
+  GstVpiFilter *self = NULL;
+  GstVpiFilterClass *vpi_filter_class = NULL;
+  GstVpiFilterPrivate *priv = NULL;
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
 
-  GST_LOG_OBJECT (filter, "Transform frame");
-
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != outframe, GST_FLOW_ERROR);
+
+  self = GST_VPI_FILTER (filter);
+
+  GST_LOG_OBJECT (self, "Transform frame");
+
+  vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
 
   in_vpi_meta =
       ((GstVpiMeta *) gst_buffer_get_meta (inframe->buffer,

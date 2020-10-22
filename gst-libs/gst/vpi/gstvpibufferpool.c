@@ -95,7 +95,6 @@ gst_vpi_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
   if (gst_buffer_add_vpi_meta (*buffer, &(self->video_info)) == NULL) {
     GST_ERROR_OBJECT (self, "Could not add VpiMeta to buffer.");
     ret = GST_FLOW_ERROR;
-    goto out;
   };
 
 out:

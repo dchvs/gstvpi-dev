@@ -64,16 +64,15 @@ gst_vpi_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   guint min_buffers = 0;
   guint max_buffers = 0;
 
-  g_return_val_if_fail (GST_BUFFER_POOL_CLASS
-      (gst_vpi_buffer_pool_parent_class)->set_config (pool, config), FALSE);
-
+  if (!GST_BUFFER_POOL_CLASS (gst_vpi_buffer_pool_parent_class)->set_config
+      (pool, config)) {
+    return FALSE;
+  }
 
   gst_buffer_pool_config_get_params (config, &caps, &size, &min_buffers,
       &max_buffers);
-  g_return_val_if_fail (gst_video_info_from_caps (&self->video_info, caps),
-      FALSE);
 
-  return TRUE;
+  return gst_video_info_from_caps (&self->video_info, caps);
 }
 
 static GstFlowReturn

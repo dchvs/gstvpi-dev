@@ -140,6 +140,7 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   } else {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("Cannot process buffers that do not contain the VPI meta."), (NULL));
+    ret = GST_FLOW_ERROR;
   }
 
   return ret;

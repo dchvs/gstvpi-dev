@@ -25,9 +25,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_BE, GRAY16_LE }")
 
-#define DEFAULT_PROP_SIZE_MIN 3
+#define DEFAULT_PROP_SIZE_MIN 0
 #define DEFAULT_PROP_SIZE_MAX 11
-#define DEFAULT_PROP_SIGMA_MIN 0.1
+#define DEFAULT_PROP_SIGMA_MIN 0.0
 #define DEFAULT_PROP_SIGMA_MAX G_MAXDOUBLE
 
 #define DEFAULT_PROP_SIZE 7
@@ -95,26 +95,30 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
   g_object_class_install_property (gobject_class, PROP_SIZE_X,
       g_param_spec_int ("size-x", "Kernel size X",
           "Gaussian kernel size in X direction. "
-          "Must be between 3 and 11, and odd",
+          "Must be between 0 and 11, and odd."
+          "If it is 0, sigma-x will be used to compute its value.",
           DEFAULT_PROP_SIZE_MIN, DEFAULT_PROP_SIZE_MAX, DEFAULT_PROP_SIZE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_SIZE_Y,
       g_param_spec_int ("size-y", "Kernel size Y",
           "Gaussian kernel size in Y direction. "
-          "Must be between 3 and 11, and odd",
+          "Must be between 0 and 11, and odd."
+          "If it is 0, sigma-y will be used to compute its value.",
           DEFAULT_PROP_SIZE_MIN, DEFAULT_PROP_SIZE_MAX, DEFAULT_PROP_SIZE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_SIGMA_X,
       g_param_spec_double ("sigma-x", "Standard deviation X",
-          "Standard deviation of the Gaussian kernel in the X direction.",
+          "Standard deviation of the Gaussian kernel in the X direction."
+          "If it is 0, size-x will be used to compute its value.",
           DEFAULT_PROP_SIGMA_MIN, DEFAULT_PROP_SIGMA_MAX, DEFAULT_PROP_SIGMA,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_SIGMA_Y,
       g_param_spec_double ("sigma-y", "Standard deviation Y",
-          "Standard deviation of the Gaussian kernel in the Y direction.",
+          "Standard deviation of the Gaussian kernel in the Y direction."
+          "If it is 0, size-y will be used to compute its value.",
           DEFAULT_PROP_SIGMA_MIN, DEFAULT_PROP_SIGMA_MAX, DEFAULT_PROP_SIGMA,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
@@ -158,27 +162,80 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   return ret;
 }
 
+static gint
+gst_vpi_gaussian_filter_get_size (GstVpiGaussianFilter * self, gint size,
+    gdouble sigma)
+{
+  gint ret = DEFAULT_PROP_SIZE;
+
+  if (0 == size && 0 == sigma) {
+    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
+        "the same direction. Using default value for size.");
+  } else if (0 != size && 0 == size % 2) {
+    GST_WARNING_OBJECT (self,
+        "Property size must be odd. Using default value.");
+  } else {
+    ret = size;
+  }
+  return ret;
+}
+
+static gdouble
+gst_vpi_gaussian_filter_get_sigma (GstVpiGaussianFilter * self, gint size,
+    gdouble sigma)
+{
+  gdouble ret = DEFAULT_PROP_SIGMA;
+
+  if (0 == size && 0 == sigma) {
+    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
+        "the same direction. Using default value for sigma.");
+  } else if (0 == sigma) {
+    ret = 0.3 * ((self->size_x - 1) * 0.5 - 1) + 0.8;
+  } else {
+    ret = sigma;
+  }
+  return ret;
+}
+
 void
 gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
   GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (object);
+  gint size = 0;
+  gdouble sigma = 0;
 
   GST_DEBUG_OBJECT (self, "set_property");
 
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_SIZE_X:
-      self->size_x = g_value_get_int (value);
+      size = g_value_get_int (value);
+
+      self->size_x = gst_vpi_gaussian_filter_get_size (self, size,
+          self->sigma_x);
+      self->sigma_x = gst_vpi_gaussian_filter_get_sigma (self, size,
+          self->sigma_x);
       break;
     case PROP_SIZE_Y:
-      self->size_y = g_value_get_int (value);
+      size = g_value_get_int (value);
+
+      self->size_y = gst_vpi_gaussian_filter_get_size (self, size,
+          self->sigma_y);
+      self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, size,
+          self->sigma_y);
       break;
     case PROP_SIGMA_X:
-      self->sigma_x = g_value_get_double (value);
+      sigma = g_value_get_double (value);
+
+      self->sigma_x = gst_vpi_gaussian_filter_get_sigma (self, self->size_x,
+          sigma);
       break;
     case PROP_SIGMA_Y:
-      self->sigma_y = g_value_get_double (value);
+      sigma = g_value_get_double (value);
+
+      self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, self->size_y,
+          sigma);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

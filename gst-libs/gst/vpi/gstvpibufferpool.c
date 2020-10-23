@@ -35,24 +35,24 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiBufferPool, gst_vpi_buffer_pool,
 /* prototypes */
 static gboolean gst_vpi_buffer_pool_set_config (GstBufferPool * pool,
     GstStructure * config);
-static GstFlowReturn gst_vpi_buffer_pool_alloc_buffer (GstBufferPool * pool,
-    GstBuffer ** buffer, GstBufferPoolAcquireParams * params);
+static gboolean gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool,
+    GstBuffer * buffer);
 
 static void
 gst_vpi_buffer_pool_class_init (GstVpiBufferPoolClass * klass)
 {
   GstBufferPoolClass *buffer_pool_class = GST_BUFFER_POOL_CLASS (klass);
+  GstCudaBufferPoolClass *cuda_pool_class = GST_CUDA_BUFFER_POOL_CLASS (klass);
 
-  buffer_pool_class->alloc_buffer =
-      GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_alloc_buffer);
   buffer_pool_class->set_config =
       GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_set_config);
+  cuda_pool_class->add_meta = GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_add_meta);
 }
 
 static void
 gst_vpi_buffer_pool_init (GstVpiBufferPool * self)
 {
-  GST_INFO_OBJECT (self, "New CUDA buffer pool");
+  GST_INFO_OBJECT (self, "New VPI buffer pool");
 }
 
 static gboolean
@@ -75,27 +75,28 @@ gst_vpi_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   return gst_video_info_from_caps (&self->video_info, caps);
 }
 
-static GstFlowReturn
-gst_vpi_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
-    GstBufferPoolAcquireParams * params)
+static gboolean
+gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool, GstBuffer * buffer)
 {
-  GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (pool);
-  GstFlowReturn ret = GST_FLOW_ERROR;
-
-  GST_DEBUG_OBJECT (self, "Creating VPI Buffer Pool");
+  GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (cuda_pool);
+  gboolean ret = FALSE;
 
   ret =
-      GST_BUFFER_POOL_CLASS (gst_vpi_buffer_pool_parent_class)->alloc_buffer
-      (pool, buffer, params);
-  if (ret == GST_FLOW_ERROR)
+      GST_CUDA_BUFFER_POOL_CLASS (gst_vpi_buffer_pool_parent_class)->add_meta
+      (cuda_pool, buffer);
+  if (ret == FALSE) {
     goto out;
+  }
 
-  GST_DEBUG_OBJECT (self, "Adding VpiMeta to buffer");
+  GST_INFO_OBJECT (self, "Adding VPI meta to the buffer");
 
-  if (gst_buffer_add_vpi_meta (*buffer, &(self->video_info)) == NULL) {
-    GST_ERROR_OBJECT (self, "Could not add VpiMeta to buffer.");
+  if (gst_buffer_add_vpi_meta (buffer, &(self->video_info)) == NULL) {
+    GST_ERROR_OBJECT (self, "Failed to add VpiMeta to buffer.");
     ret = GST_FLOW_ERROR;
   };
+
+  if (ret == GST_FLOW_OK)
+    GST_INFO_OBJECT (self, "Success adding VPI meta to the buffer");
 
 out:
   return ret;

@@ -46,6 +46,8 @@ G_DEFINE_TYPE_WITH_CODE (GstCudaBufferPool, gst_cuda_buffer_pool,
 /* prototypes */
 static gboolean gst_cuda_buffer_pool_set_config (GstBufferPool * pool,
     GstStructure * config);
+static gboolean gst_cuda_buffer_pool_add_meta (GstCudaBufferPool * self,
+    GstBuffer * buffer);
 static GstFlowReturn gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool,
     GstBuffer ** buffer, GstBufferPoolAcquireParams * params);
 static void gst_cuda_buffer_pool_finalize (GObject * object);
@@ -57,6 +59,8 @@ gst_cuda_buffer_pool_class_init (GstCudaBufferPoolClass * klass)
   GstBufferPoolClass *bp_class = GST_BUFFER_POOL_CLASS (klass);
 
   g_type_class_add_private (o_class, sizeof (GstCudaBufferPoolPrivate));
+
+  klass->add_meta = GST_DEBUG_FUNCPTR (gst_cuda_buffer_pool_add_meta);
 
   o_class->finalize = gst_cuda_buffer_pool_finalize;
 
@@ -124,6 +128,22 @@ error:
   return FALSE;
 }
 
+static gboolean
+gst_cuda_buffer_pool_add_meta (GstCudaBufferPool * self, GstBuffer * buffer)
+{
+
+  GST_INFO_OBJECT (self, "Adding CUDA meta to the buffer");
+
+  g_return_val_if_fail (buffer, FALSE);
+
+  if (gst_buffer_add_cuda_meta (buffer) == NULL) {
+    GST_ERROR_OBJECT (self, "Failed to add cuda meta to buffer");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
 static GstFlowReturn
 gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
     GstBufferPoolAcquireParams * params)
@@ -158,7 +178,9 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
         priv->caps_info.stride);
   }
 
-  gst_buffer_add_cuda_meta (outbuf);
+  if (!GST_CUDA_BUFFER_POOL_GET_CLASS (self)->add_meta (self, outbuf)) {
+    ret = GST_FLOW_ERROR;
+  }
 
   *buffer = outbuf;
   ret = GST_FLOW_OK;

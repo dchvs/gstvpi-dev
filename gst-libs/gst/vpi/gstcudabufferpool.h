@@ -29,6 +29,8 @@ G_DECLARE_DERIVABLE_TYPE(GstCudaBufferPool, gst_cuda_buffer_pool, GST_CUDA, BUFF
 struct _GstCudaBufferPoolClass
 {
   GstBufferPoolClass parent_class;
+
+  gboolean (*add_meta) (GstCudaBufferPool * self, GstBuffer * buffer);
 };
 
 G_END_DECLS

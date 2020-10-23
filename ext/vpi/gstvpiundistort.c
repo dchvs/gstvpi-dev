@@ -83,13 +83,17 @@ static GstFlowReturn
 gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
     VPIImage in_image, VPIImage out_image)
 {
-  GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
+  GstVpiUndistort *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
 
-  GST_LOG_OBJECT (self, "Transform image");
+  g_return_val_if_fail (filter, GST_FLOW_ERROR);
+  g_return_val_if_fail (stream, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_image, GST_FLOW_ERROR);
 
-  g_return_val_if_fail (NULL != in_image, GST_FLOW_ERROR);
-  g_return_val_if_fail (NULL != out_image, GST_FLOW_ERROR);
+  self = GST_VPI_UNDISTORT (filter);
+
+  GST_LOG_OBJECT (self, "Transform image");
 
   /* TODO: Call to undistort function */
 

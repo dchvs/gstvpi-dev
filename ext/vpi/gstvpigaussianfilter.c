@@ -32,10 +32,12 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 
 #define DEFAULT_PROP_SIZE 7
 #define DEFAULT_PROP_SIGMA 1.7
+#define DEFAULT_PROP_BOUNDARY_COND VPI_BOUNDARY_COND_ZERO
 
 struct _GstVpiGaussianFilter
 {
   GstVpiFilter parent;
+  gint boundary_cond;
   gint size_x;
   gint size_y;
   gdouble sigma_x;
@@ -57,8 +59,29 @@ enum
   PROP_SIZE_X,
   PROP_SIZE_Y,
   PROP_SIGMA_X,
-  PROP_SIGMA_Y
+  PROP_SIGMA_Y,
+  PROP_BOUNDARY_COND
 };
+
+GType
+vpi_boundary_cond_enum_get_type (void)
+{
+  static GType vpi_boundary_cond_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_BOUNDARY_COND_ZERO, "All pixels outside the image are considered 0.",
+        "zero"},
+    {VPI_BOUNDARY_COND_CLAMP, "Border pixels are repeated indefinitely.",
+        "clamp"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_boundary_cond_enum_type) {
+    vpi_boundary_cond_enum_type = g_enum_register_static ("VpiBoundCond",
+        values);
+  }
+
+  return vpi_boundary_cond_enum_type;
+}
 
 /* class initialization */
 
@@ -121,11 +144,18 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
           "If it is 0, size-y will be used to compute its value.",
           DEFAULT_PROP_SIGMA_MIN, DEFAULT_PROP_SIGMA_MAX, DEFAULT_PROP_SIGMA,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_BOUNDARY_COND,
+      g_param_spec_enum ("boundary", "Boundary condition",
+          "How pixel values outside of the image domain should be treated.",
+          VPI_BOUNDARY_CONDS_ENUM, DEFAULT_PROP_BOUNDARY_COND,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * self)
 {
+  self->boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
   self->size_x = DEFAULT_PROP_SIZE;
   self->size_y = DEFAULT_PROP_SIZE;
   self->sigma_x = DEFAULT_PROP_SIGMA;
@@ -152,7 +182,7 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   GST_OBJECT_LOCK (self);
   status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
       self->size_x, self->size_y, self->sigma_x, self->sigma_y,
-      VPI_BOUNDARY_COND_ZERO);
+      self->boundary_cond);
   GST_OBJECT_UNLOCK (self);
 
   if (VPI_SUCCESS != status) {
@@ -190,7 +220,7 @@ gst_vpi_gaussian_filter_get_sigma (GstVpiGaussianFilter * self, gint size,
     GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
         "the same direction. Using default value for sigma.");
   } else if (0 == sigma) {
-    ret = 0.3 * ((self->size_x - 1) * 0.5 - 1) + 0.8;
+    ret = 0.3 * ((size - 1) * 0.5 - 1) + 0.8;
   } else {
     ret = sigma;
   }
@@ -214,7 +244,7 @@ gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
 
       self->size_x = gst_vpi_gaussian_filter_get_size (self, size,
           self->sigma_x);
-      self->sigma_x = gst_vpi_gaussian_filter_get_sigma (self, size,
+      self->sigma_x = gst_vpi_gaussian_filter_get_sigma (self, self->size_x,
           self->sigma_x);
       break;
     case PROP_SIZE_Y:
@@ -222,7 +252,7 @@ gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
 
       self->size_y = gst_vpi_gaussian_filter_get_size (self, size,
           self->sigma_y);
-      self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, size,
+      self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, self->size_y,
           self->sigma_y);
       break;
     case PROP_SIGMA_X:
@@ -236,6 +266,9 @@ gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
 
       self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, self->size_y,
           sigma);
+      break;
+    case PROP_BOUNDARY_COND:
+      self->boundary_cond = g_value_get_enum (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -265,6 +298,9 @@ gst_vpi_gaussian_filter_get_property (GObject * object, guint property_id,
       break;
     case PROP_SIGMA_Y:
       g_value_set_double (value, self->sigma_y);
+      break;
+    case PROP_BOUNDARY_COND:
+      g_value_set_enum (value, self->boundary_cond);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

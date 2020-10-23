@@ -18,19 +18,6 @@ static gboolean gst_vpi_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
 static void gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer);
 
-/**
- * GstVpiMeta:
- * @meta: parent #GstMeta
- *
- * Extra buffer metadata, wraping UM pointer in VPIImage.
- */
-struct _GstVpiMeta
-{
-  GstMeta meta;
-
-  VPIImage vpi_image;
-};
-
 GType
 gst_vpi_meta_api_get_type (void)
 {
@@ -69,8 +56,8 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   VPIImageData vpi_image_data;
   VPIStatus status;
 
-  g_return_val_if_fail (buffer != NULL, NULL);
-  g_return_val_if_fail (video_info != NULL, NULL);
+  g_return_val_if_fail (NULL != buffer, NULL);
+  g_return_val_if_fail (NULL != video_info, NULL);
 
   GST_LOG ("Adding VPI meta to buffer %p", buffer);
 
@@ -96,7 +83,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   }
 
   status = vpiImageWrapCudaDeviceMem (&vpi_image_data, 0, &(ret->vpi_image));
-  if (status != VPI_SUCCESS) {
+  if (VPI_SUCCESS != status) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
     ret = NULL;
   }

@@ -17,6 +17,7 @@
 #include <gst/gst.h>
 
 #include "gstvpidownload.h"
+#include "gstvpigaussianfilter.h"
 #include "gstvpiundistort.h"
 #include "gstvpiupload.h"
 
@@ -31,6 +32,12 @@ vpi_init (GstPlugin * vpi)
     goto out;
   }
 
+  if (!gst_element_register (vpi, "vpigaussianfilter", GST_RANK_NONE,
+          GST_TYPE_VPI_GAUSSIAN_FILTER)) {
+    GST_ERROR ("Failed to register vpigaussianfilter");
+    goto out;
+  }
+
   if (!gst_element_register (vpi, "vpiundistort", GST_RANK_NONE,
           GST_TYPE_VPI_UNDISTORT)) {
     GST_ERROR ("Failed to register vpiundistort");
@@ -41,7 +48,7 @@ vpi_init (GstPlugin * vpi)
           GST_TYPE_VPI_UPLOAD)) {
     GST_ERROR ("Failed to register vpiupload");
     goto out;
-  }  
+  }
 
   ret = TRUE;
 

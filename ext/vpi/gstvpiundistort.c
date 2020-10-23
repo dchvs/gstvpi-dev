@@ -29,8 +29,8 @@ struct _GstVpiUndistort
 };
 
 /* prototypes */
-static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter * filter,
-    VPIImage * in_image, VPIImage * out_image);
+static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter *
+    filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
 static void gst_vpi_undistort_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_undistort_get_property (GObject * object,
@@ -80,16 +80,20 @@ gst_vpi_undistort_init (GstVpiUndistort * vpi_undistort)
 }
 
 static GstFlowReturn
-gst_vpi_undistort_transform_image (GstVpiFilter * filter,
-    VPIImage * in_image, VPIImage * out_image)
+gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
+    VPIImage in_image, VPIImage out_image)
 {
-  GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
+  GstVpiUndistort *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
 
-  GST_LOG_OBJECT (self, "Transform image");
+  g_return_val_if_fail (filter, GST_FLOW_ERROR);
+  g_return_val_if_fail (stream, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_image, GST_FLOW_ERROR);
 
-  g_return_val_if_fail (in_image != NULL, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_image != NULL, GST_FLOW_ERROR);
+  self = GST_VPI_UNDISTORT (filter);
+
+  GST_LOG_OBJECT (self, "Transform image");
 
   /* TODO: Call to undistort function */
 

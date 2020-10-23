@@ -145,9 +145,11 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
 
   GST_LOG_OBJECT (self, "Transform image");
 
+  GST_OBJECT_LOCK (self);
   status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
       self->size_x, self->size_y, self->sigma_x, self->sigma_y,
       VPI_BOUNDARY_COND_ZERO);
+  GST_OBJECT_UNLOCK (self);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -164,6 +166,7 @@ gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
 
   GST_DEBUG_OBJECT (self, "set_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_SIZE_X:
       self->size_x = g_value_get_int (value);
@@ -181,6 +184,7 @@ gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 void
@@ -191,6 +195,7 @@ gst_vpi_gaussian_filter_get_property (GObject * object, guint property_id,
 
   GST_DEBUG_OBJECT (self, "get_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_SIZE_X:
       g_value_set_int (value, self->size_x);
@@ -208,6 +213,7 @@ gst_vpi_gaussian_filter_get_property (GObject * object, guint property_id,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 void

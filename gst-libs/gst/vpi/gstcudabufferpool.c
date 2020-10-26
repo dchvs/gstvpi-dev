@@ -46,8 +46,6 @@ G_DEFINE_TYPE_WITH_CODE (GstCudaBufferPool, gst_cuda_buffer_pool,
 /* prototypes */
 static gboolean gst_cuda_buffer_pool_set_config (GstBufferPool * pool,
     GstStructure * config);
-static gboolean gst_cuda_buffer_pool_add_meta (GstCudaBufferPool * self,
-    GstBuffer * buffer);
 static GstFlowReturn gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool,
     GstBuffer ** buffer, GstBufferPoolAcquireParams * params);
 static void gst_cuda_buffer_pool_finalize (GObject * object);
@@ -59,8 +57,6 @@ gst_cuda_buffer_pool_class_init (GstCudaBufferPoolClass * klass)
   GstBufferPoolClass *bp_class = GST_BUFFER_POOL_CLASS (klass);
 
   g_type_class_add_private (o_class, sizeof (GstCudaBufferPoolPrivate));
-
-  klass->add_meta = GST_DEBUG_FUNCPTR (gst_cuda_buffer_pool_add_meta);
 
   o_class->finalize = gst_cuda_buffer_pool_finalize;
 
@@ -86,6 +82,7 @@ static gboolean
 gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 {
   GstCudaBufferPool *self = GST_CUDA_BUFFER_POOL (pool);
+  GstCudaBufferPoolClass *klass = NULL;
   GstCudaBufferPoolPrivate *priv =
       G_TYPE_INSTANCE_GET_PRIVATE (self, GST_CUDA_TYPE_BUFFER_POOL,
       GstCudaBufferPoolPrivate);
@@ -120,6 +117,13 @@ gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   GST_DEBUG_OBJECT (self, "The client needs video meta: %s",
       priv->needs_video_meta ? "TRUE" : "FALSE");
 
+  klass = GST_CUDA_BUFFER_POOL_GET_CLASS (self);
+  if (klass->set_config) {
+    if (!klass->set_config (pool, config)) {
+      goto error;
+    }
+  }
+
   return
       GST_BUFFER_POOL_CLASS (gst_cuda_buffer_pool_parent_class)->set_config
       (pool, config);
@@ -149,6 +153,7 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
     GstBufferPoolAcquireParams * params)
 {
   GstCudaBufferPool *self = GST_CUDA_BUFFER_POOL (pool);
+  GstCudaBufferPoolClass *klass = NULL;
   GstCudaBufferPoolPrivate *priv =
       G_TYPE_INSTANCE_GET_PRIVATE (self, GST_CUDA_TYPE_BUFFER_POOL,
       GstCudaBufferPoolPrivate);
@@ -178,8 +183,14 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
         priv->caps_info.stride);
   }
 
-  if (!GST_CUDA_BUFFER_POOL_GET_CLASS (self)->add_meta (self, outbuf)) {
-    ret = GST_FLOW_ERROR;
+  gst_cuda_buffer_pool_add_meta (self, outbuf);
+
+  klass = GST_CUDA_BUFFER_POOL_GET_CLASS (self);
+  if (klass->add_meta) {
+    if (!klass->add_meta (self, outbuf)) {
+      ret = GST_FLOW_ERROR;
+      goto out;
+    }
   }
 
   *buffer = outbuf;

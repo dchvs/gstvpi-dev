@@ -41,10 +41,9 @@ static gboolean gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool,
 static void
 gst_vpi_buffer_pool_class_init (GstVpiBufferPoolClass * klass)
 {
-  GstBufferPoolClass *buffer_pool_class = GST_BUFFER_POOL_CLASS (klass);
   GstCudaBufferPoolClass *cuda_pool_class = GST_CUDA_BUFFER_POOL_CLASS (klass);
 
-  buffer_pool_class->set_config =
+  cuda_pool_class->set_config =
       GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_set_config);
   cuda_pool_class->add_meta = GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_add_meta);
 }
@@ -60,17 +59,11 @@ gst_vpi_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 {
   GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (pool);
   GstCaps *caps = NULL;
-  guint size = 0;
-  guint min_buffers = 0;
-  guint max_buffers = 0;
 
-  if (!GST_BUFFER_POOL_CLASS (gst_vpi_buffer_pool_parent_class)->set_config
-      (pool, config)) {
+  if (!gst_buffer_pool_config_get_params (config, &caps, NULL, NULL, NULL)) {
+    GST_ERROR_OBJECT (self, "Error getting parameters from buffer pool config");
     return FALSE;
   }
-
-  gst_buffer_pool_config_get_params (config, &caps, &size, &min_buffers,
-      &max_buffers);
 
   return gst_video_info_from_caps (&self->video_info, caps);
 }
@@ -79,25 +72,13 @@ static gboolean
 gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool, GstBuffer * buffer)
 {
   GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (cuda_pool);
-  gboolean ret = FALSE;
-
-  ret =
-      GST_CUDA_BUFFER_POOL_CLASS (gst_vpi_buffer_pool_parent_class)->add_meta
-      (cuda_pool, buffer);
-  if (ret == FALSE) {
-    goto out;
-  }
 
   GST_INFO_OBJECT (self, "Adding VPI meta to the buffer");
 
   if (gst_buffer_add_vpi_meta (buffer, &(self->video_info)) == NULL) {
     GST_ERROR_OBJECT (self, "Failed to add VpiMeta to buffer.");
-    ret = GST_FLOW_ERROR;
+    return FALSE;
   };
 
-  if (ret == GST_FLOW_OK)
-    GST_INFO_OBJECT (self, "Success adding VPI meta to the buffer");
-
-out:
-  return ret;
+  return TRUE;
 }

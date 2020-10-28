@@ -97,6 +97,18 @@ gst_vpi_filter_start (GstBaseTransform * trans)
   return ret;
 }
 
+static void
+gst_vpi_filter_check_attach_status (GstVpiFilter * self, cudaError_t status)
+{
+  g_return_if_fail (self);
+
+  if (cudaSuccess != status) {
+    GST_WARNING_OBJECT (self,
+        "Could not attach buffer to CUDA stream. Error: %s",
+        cudaGetErrorString (status));
+  }
+}
+
 static GstFlowReturn
 gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe)
@@ -107,6 +119,8 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  VPIStatus vpi_status = VPI_SUCCESS;
+  cudaError_t cuda_status = cudaSuccess;
   VPIStream vpi_stream;
   GstMapInfo in_minfo;
   GstMapInfo out_minfo;
@@ -135,13 +149,24 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     gst_buffer_map (inframe->buffer, &in_minfo, GST_MAP_READ);
     gst_buffer_map (outframe->buffer, &out_minfo, GST_MAP_READWRITE);
 
-    cudaStreamAttachMemAsync (priv->cuda_stream, in_minfo.data, 0,
+    cuda_status = cudaStreamAttachMemAsync (priv->cuda_stream, in_minfo.data, 0,
         cudaMemAttachSingle);
-    cudaStreamAttachMemAsync (priv->cuda_stream, out_minfo.data, 0,
+    gst_vpi_filter_check_attach_status (self, cuda_status);
+
+    cuda_status =
+        cudaStreamAttachMemAsync (priv->cuda_stream, out_minfo.data, 0,
         cudaMemAttachSingle);
+    gst_vpi_filter_check_attach_status (self, cuda_status);
+
     cudaStreamSynchronize (priv->cuda_stream);
 
-    vpiStreamWrapCuda (priv->cuda_stream, &vpi_stream);
+    vpi_status = vpiStreamWrapCuda (priv->cuda_stream, &vpi_stream);
+    if (VPI_SUCCESS != vpi_status) {
+      GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+          ("Could not wrap CUDA stream."), (NULL));
+      ret = GST_FLOW_ERROR;
+      goto out;
+    }
 
     ret = vpi_filter_class->transform_image (self, vpi_stream,
         in_vpi_meta->vpi_image, out_vpi_meta->vpi_image);
@@ -150,8 +175,14 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     vpiStreamDestroy (vpi_stream);
 
     /* Attach memory to global stream to detach it from CUDA stream */
-    cudaStreamAttachMemAsync (NULL, in_minfo.data, 0, cudaMemAttachHost);
-    cudaStreamAttachMemAsync (NULL, out_minfo.data, 0, cudaMemAttachHost);
+    cuda_status =
+        cudaStreamAttachMemAsync (NULL, in_minfo.data, 0, cudaMemAttachHost);
+    gst_vpi_filter_check_attach_status (self, cuda_status);
+
+    cuda_status =
+        cudaStreamAttachMemAsync (NULL, out_minfo.data, 0, cudaMemAttachHost);
+    gst_vpi_filter_check_attach_status (self, cuda_status);
+
     cudaDeviceSynchronize ();
 
     if (GST_FLOW_OK != ret) {
@@ -164,6 +195,8 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
         ("Cannot process buffers that do not contain the VPI meta."), (NULL));
     ret = GST_FLOW_ERROR;
   }
+
+out:
 
   return ret;
 }

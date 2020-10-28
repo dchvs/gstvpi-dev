@@ -16,6 +16,8 @@
 
 #include "gstvpifilter.h"
 
+#include <cuda_runtime.h>
+
 #include "gstcudabufferpool.h"
 #include "gstcudameta.h"
 #include "gstvpimeta.h"
@@ -28,7 +30,7 @@ typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 struct _GstVpiFilterPrivate
 {
   GstCudaBufferPool *downstream_buffer_pool;
-  VPIStream stream;
+  cudaStream_t cuda_stream;
 };
 
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
@@ -74,7 +76,7 @@ gst_vpi_filter_init (GstVpiFilter * self)
       GstVpiFilterPrivate);
 
   priv->downstream_buffer_pool = NULL;
-  vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->stream);
+  cudaStreamCreate (&priv->cuda_stream);
 }
 
 static gboolean
@@ -105,6 +107,9 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  VPIStream vpi_stream;
+  GstMapInfo in_minfo;
+  GstMapInfo out_minfo;
 
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);
@@ -127,10 +132,27 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   if (in_vpi_meta && out_vpi_meta) {
 
-    ret = vpi_filter_class->transform_image (self, priv->stream,
+    gst_buffer_map (inframe->buffer, &in_minfo, GST_MAP_READ);
+    gst_buffer_map (outframe->buffer, &out_minfo, GST_MAP_READWRITE);
+
+    cudaStreamAttachMemAsync (priv->cuda_stream, in_minfo.data, 0,
+        cudaMemAttachSingle);
+    cudaStreamAttachMemAsync (priv->cuda_stream, out_minfo.data, 0,
+        cudaMemAttachSingle);
+    cudaStreamSynchronize (priv->cuda_stream);
+
+    vpiStreamWrapCuda (priv->cuda_stream, &vpi_stream);
+
+    ret = vpi_filter_class->transform_image (self, vpi_stream,
         in_vpi_meta->vpi_image, out_vpi_meta->vpi_image);
 
-    vpiStreamSync (priv->stream);
+    vpiStreamSync (vpi_stream);
+    vpiStreamDestroy (vpi_stream);
+
+    /* Attach memory to global stream to detach it from CUDA stream */
+    cudaStreamAttachMemAsync (NULL, in_minfo.data, 0, cudaMemAttachHost);
+    cudaStreamAttachMemAsync (NULL, out_minfo.data, 0, cudaMemAttachHost);
+    cudaDeviceSynchronize ();
 
     if (GST_FLOW_OK != ret) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -247,11 +269,8 @@ gst_vpi_filter_finalize (GObject * object)
 
   g_clear_object (&priv->downstream_buffer_pool);
 
-  if (NULL != priv->stream) {
-    vpiStreamSync (priv->stream);
-    vpiStreamDestroy (priv->stream);
-    priv->stream = NULL;
-  }
+  cudaStreamDestroy (priv->cuda_stream);
+  priv->cuda_stream = NULL;
 
   G_OBJECT_CLASS (gst_vpi_filter_parent_class)->finalize (object);
 }

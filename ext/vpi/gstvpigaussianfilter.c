@@ -193,7 +193,7 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
 }
 
 static gint
-gst_vpi_gaussian_filter_get_size (GstVpiGaussianFilter * self, gint size,
+gst_vpi_gaussian_filter_adjust_size (GstVpiGaussianFilter * self, gint size,
     gdouble sigma)
 {
   gint ret = DEFAULT_PROP_SIZE;
@@ -211,7 +211,7 @@ gst_vpi_gaussian_filter_get_size (GstVpiGaussianFilter * self, gint size,
 }
 
 static gdouble
-gst_vpi_gaussian_filter_get_sigma (GstVpiGaussianFilter * self, gint size,
+gst_vpi_gaussian_filter_adjust_sigma (GstVpiGaussianFilter * self, gint size,
     gdouble sigma)
 {
   gdouble ret = DEFAULT_PROP_SIGMA;
@@ -242,29 +242,29 @@ gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
     case PROP_SIZE_X:
       size = g_value_get_int (value);
 
-      self->size_x = gst_vpi_gaussian_filter_get_size (self, size,
+      self->size_x = gst_vpi_gaussian_filter_adjust_size (self, size,
           self->sigma_x);
-      self->sigma_x = gst_vpi_gaussian_filter_get_sigma (self, self->size_x,
+      self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
           self->sigma_x);
       break;
     case PROP_SIZE_Y:
       size = g_value_get_int (value);
 
-      self->size_y = gst_vpi_gaussian_filter_get_size (self, size,
+      self->size_y = gst_vpi_gaussian_filter_adjust_size (self, size,
           self->sigma_y);
-      self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, self->size_y,
+      self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
           self->sigma_y);
       break;
     case PROP_SIGMA_X:
       sigma = g_value_get_double (value);
 
-      self->sigma_x = gst_vpi_gaussian_filter_get_sigma (self, self->size_x,
+      self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
           sigma);
       break;
     case PROP_SIGMA_Y:
       sigma = g_value_get_double (value);
 
-      self->sigma_y = gst_vpi_gaussian_filter_get_sigma (self, self->size_y,
+      self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
           sigma);
       break;
     case PROP_BOUNDARY_COND:

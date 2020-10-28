@@ -169,6 +169,11 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   GstVpiGaussianFilter *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  gint size_x = 0;
+  gint size_y = 0;
+  gint boundary_cond = 0;
+  gdouble sigma_x = 0;
+  gdouble sigma_y = 0;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -180,10 +185,15 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   GST_LOG_OBJECT (self, "Transform image");
 
   GST_OBJECT_LOCK (self);
-  status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
-      self->size_x, self->size_y, self->sigma_x, self->sigma_y,
-      self->boundary_cond);
+  size_x = self->size_x;
+  size_y = self->size_y;
+  sigma_x = self->sigma_x;
+  sigma_y = self->sigma_y;
+  boundary_cond = self->boundary_cond;
   GST_OBJECT_UNLOCK (self);
+
+  status = vpiSubmitGaussianImageFilter (stream, in_image, out_image, size_x,
+      size_y, sigma_x, sigma_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;

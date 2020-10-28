@@ -120,6 +120,7 @@ gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   klass = GST_CUDA_BUFFER_POOL_GET_CLASS (self);
   if (klass->set_config) {
     if (!klass->set_config (pool, config)) {
+      GST_ERROR_OBJECT (self, "Unable to set configuration");
       goto error;
     }
   }
@@ -188,6 +189,7 @@ gst_cuda_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
   klass = GST_CUDA_BUFFER_POOL_GET_CLASS (self);
   if (klass->add_meta) {
     if (!klass->add_meta (self, outbuf)) {
+      GST_ERROR_OBJECT (self, "Could not add meta to buffer");
       ret = GST_FLOW_ERROR;
       goto out;
     }

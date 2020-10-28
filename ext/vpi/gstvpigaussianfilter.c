@@ -198,6 +198,8 @@ gst_vpi_gaussian_filter_adjust_size (GstVpiGaussianFilter * self, gint size,
 {
   gint ret = DEFAULT_PROP_SIZE;
 
+  g_return_val_if_fail (self, ret);
+
   if (0 == size && 0 == sigma) {
     GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
         "the same direction. Using default value for size.");
@@ -215,6 +217,8 @@ gst_vpi_gaussian_filter_adjust_sigma (GstVpiGaussianFilter * self, gint size,
     gdouble sigma)
 {
   gdouble ret = DEFAULT_PROP_SIGMA;
+
+  g_return_val_if_fail (self, ret);
 
   if (0 == size && 0 == sigma) {
     GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "

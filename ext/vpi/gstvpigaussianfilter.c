@@ -18,7 +18,7 @@
 
 #include <gst/gst.h>
 
-#include <vpi/algo/GaussianImageFilter.h>
+#include <vpi/algo/GaussianFilter.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_gaussian_filter_debug_category
@@ -192,8 +192,8 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   boundary_cond = self->boundary_cond;
   GST_OBJECT_UNLOCK (self);
 
-  status = vpiSubmitGaussianImageFilter (stream, in_image, out_image, size_x,
-      size_y, sigma_x, sigma_y, boundary_cond);
+  status = vpiSubmitGaussianFilter (stream, VPI_BACKEND_CUDA, in_image,
+      out_image, size_x, size_y, sigma_x, sigma_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;

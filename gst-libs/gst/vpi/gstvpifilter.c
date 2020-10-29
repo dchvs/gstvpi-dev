@@ -37,6 +37,7 @@ struct _GstVpiFilterPrivate
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe);
 static gboolean gst_vpi_filter_start (GstBaseTransform * trans);
+static gboolean gst_vpi_filter_stop (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_decide_allocation (GstBaseTransform * trans,
     GstQuery * query);
 static void gst_vpi_filter_finalize (GObject * object);
@@ -64,6 +65,7 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
   video_filter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_transform_frame);
   base_transform_class->start = GST_DEBUG_FUNCPTR (gst_vpi_filter_start);
+  base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_filter_stop);
   base_transform_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_decide_allocation);
   gobject_class->finalize = gst_vpi_filter_finalize;
@@ -309,6 +311,26 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
       priv->downstream_buffer_pool, query);
 }
 
+static gboolean
+gst_vpi_filter_stop (GstBaseTransform * trans)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (trans);
+  GstVpiFilterPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
+  gboolean ret = TRUE;
+
+  GST_DEBUG_OBJECT (self, "stop");
+
+  vpiStreamDestroy (priv->vpi_stream);
+  priv->vpi_stream = NULL;
+
+  cudaStreamDestroy (priv->cuda_stream);
+  priv->cuda_stream = NULL;
+
+  return ret;
+}
+
 static void
 gst_vpi_filter_finalize (GObject * object)
 {
@@ -318,12 +340,6 @@ gst_vpi_filter_finalize (GObject * object)
   GST_INFO_OBJECT (object, "Finalize VPI filter");
 
   g_clear_object (&priv->downstream_buffer_pool);
-
-  vpiStreamDestroy (priv->vpi_stream);
-  priv->vpi_stream = NULL;
-
-  cudaStreamDestroy (priv->cuda_stream);
-  priv->cuda_stream = NULL;
 
   G_OBJECT_CLASS (gst_vpi_filter_parent_class)->finalize (object);
 }

@@ -144,8 +144,8 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  GstMapInfo in_minfo;
-  GstMapInfo out_minfo;
+  GstMapInfo in_minfo = GST_MAP_INFO_INIT;
+  GstMapInfo out_minfo = GST_MAP_INFO_INIT;
 
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);

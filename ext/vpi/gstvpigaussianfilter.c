@@ -25,9 +25,23 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_BE, GRAY16_LE }")
 
+#define DEFAULT_PROP_SIZE_MIN 0
+#define DEFAULT_PROP_SIZE_MAX 11
+#define DEFAULT_PROP_SIGMA_MIN 0.0
+#define DEFAULT_PROP_SIGMA_MAX G_MAXDOUBLE
+
+#define DEFAULT_PROP_SIZE 7
+#define DEFAULT_PROP_SIGMA 1.7
+#define DEFAULT_PROP_BOUNDARY_COND VPI_BOUNDARY_COND_ZERO
+
 struct _GstVpiGaussianFilter
 {
   GstVpiFilter parent;
+  gint boundary_cond;
+  gint size_x;
+  gint size_y;
+  gdouble sigma_x;
+  gdouble sigma_y;
 };
 
 /* prototypes */
@@ -41,8 +55,33 @@ static void gst_vpi_gaussian_filter_finalize (GObject * object);
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_SIZE_X,
+  PROP_SIZE_Y,
+  PROP_SIGMA_X,
+  PROP_SIGMA_Y,
+  PROP_BOUNDARY_COND
 };
+
+GType
+vpi_boundary_cond_enum_get_type (void)
+{
+  static GType vpi_boundary_cond_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_BOUNDARY_COND_ZERO, "All pixels outside the image are considered 0.",
+        "zero"},
+    {VPI_BOUNDARY_COND_CLAMP, "Border pixels are repeated indefinitely.",
+        "clamp"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_boundary_cond_enum_type) {
+    vpi_boundary_cond_enum_type = g_enum_register_static ("VpiBoundCond",
+        values);
+  }
+
+  return vpi_boundary_cond_enum_type;
+}
 
 /* class initialization */
 
@@ -75,11 +114,52 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
   gobject_class->set_property = gst_vpi_gaussian_filter_set_property;
   gobject_class->get_property = gst_vpi_gaussian_filter_get_property;
   gobject_class->finalize = gst_vpi_gaussian_filter_finalize;
+
+  g_object_class_install_property (gobject_class, PROP_SIZE_X,
+      g_param_spec_int ("size-x", "Kernel size X",
+          "Gaussian kernel size in X direction. "
+          "Must be between 0 and 11, and odd."
+          "If it is 0, sigma-x will be used to compute its value.",
+          DEFAULT_PROP_SIZE_MIN, DEFAULT_PROP_SIZE_MAX, DEFAULT_PROP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SIZE_Y,
+      g_param_spec_int ("size-y", "Kernel size Y",
+          "Gaussian kernel size in Y direction. "
+          "Must be between 0 and 11, and odd."
+          "If it is 0, sigma-y will be used to compute its value.",
+          DEFAULT_PROP_SIZE_MIN, DEFAULT_PROP_SIZE_MAX, DEFAULT_PROP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SIGMA_X,
+      g_param_spec_double ("sigma-x", "Standard deviation X",
+          "Standard deviation of the Gaussian kernel in the X direction."
+          "If it is 0, size-x will be used to compute its value.",
+          DEFAULT_PROP_SIGMA_MIN, DEFAULT_PROP_SIGMA_MAX, DEFAULT_PROP_SIGMA,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SIGMA_Y,
+      g_param_spec_double ("sigma-y", "Standard deviation Y",
+          "Standard deviation of the Gaussian kernel in the Y direction."
+          "If it is 0, size-y will be used to compute its value.",
+          DEFAULT_PROP_SIGMA_MIN, DEFAULT_PROP_SIGMA_MAX, DEFAULT_PROP_SIGMA,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_BOUNDARY_COND,
+      g_param_spec_enum ("boundary", "Boundary condition",
+          "How pixel values outside of the image domain should be treated.",
+          VPI_BOUNDARY_CONDS_ENUM, DEFAULT_PROP_BOUNDARY_COND,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
-gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * vpi_gaussian_filter)
+gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * self)
 {
+  self->boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
+  self->size_x = DEFAULT_PROP_SIZE;
+  self->size_y = DEFAULT_PROP_SIZE;
+  self->sigma_x = DEFAULT_PROP_SIGMA;
+  self->sigma_y = DEFAULT_PROP_SIGMA;
 }
 
 static GstFlowReturn
@@ -89,8 +169,11 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   GstVpiGaussianFilter *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
-  const gdouble sigma = 1.7;
-  const gint kernel_size = 7;
+  gint size_x = 0;
+  gint size_y = 0;
+  gint boundary_cond = 0;
+  gdouble sigma_x = 0;
+  gdouble sigma_y = 0;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -101,8 +184,16 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
 
   GST_LOG_OBJECT (self, "Transform image");
 
-  status = vpiSubmitGaussianImageFilter (stream, in_image, out_image,
-      kernel_size, kernel_size, sigma, sigma, VPI_BOUNDARY_COND_ZERO);
+  GST_OBJECT_LOCK (self);
+  size_x = self->size_x;
+  size_y = self->size_y;
+  sigma_x = self->sigma_x;
+  sigma_y = self->sigma_y;
+  boundary_cond = self->boundary_cond;
+  GST_OBJECT_UNLOCK (self);
+
+  status = vpiSubmitGaussianImageFilter (stream, in_image, out_image, size_x,
+      size_y, sigma_x, sigma_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -111,34 +202,125 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   return ret;
 }
 
+static gint
+gst_vpi_gaussian_filter_adjust_size (GstVpiGaussianFilter * self, gint size,
+    gdouble sigma)
+{
+  gint ret = DEFAULT_PROP_SIZE;
+
+  g_return_val_if_fail (self, ret);
+
+  if (0 == size && 0 == sigma) {
+    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
+        "the same direction. Using default value for size.");
+  } else if (0 != size && 0 == size % 2) {
+    GST_WARNING_OBJECT (self,
+        "Property size must be odd. Using default value.");
+  } else {
+    ret = size;
+  }
+  return ret;
+}
+
+static gdouble
+gst_vpi_gaussian_filter_adjust_sigma (GstVpiGaussianFilter * self, gint size,
+    gdouble sigma)
+{
+  gdouble ret = DEFAULT_PROP_SIGMA;
+
+  g_return_val_if_fail (self, ret);
+
+  if (0 == size && 0 == sigma) {
+    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
+        "the same direction. Using default value for sigma.");
+  } else if (0 == sigma) {
+    ret = 0.3 * ((size - 1) * 0.5 - 1) + 0.8;
+  } else {
+    ret = sigma;
+  }
+  return ret;
+}
+
 void
 gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstVpiGaussianFilter *vpi_gaussian_filter = GST_VPI_GAUSSIAN_FILTER (object);
+  GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (object);
+  gint size = 0;
+  gdouble sigma = 0;
 
-  GST_DEBUG_OBJECT (vpi_gaussian_filter, "set_property");
+  GST_DEBUG_OBJECT (self, "set_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_SIZE_X:
+      size = g_value_get_int (value);
+
+      self->size_x = gst_vpi_gaussian_filter_adjust_size (self, size,
+          self->sigma_x);
+      self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
+          self->sigma_x);
+      break;
+    case PROP_SIZE_Y:
+      size = g_value_get_int (value);
+
+      self->size_y = gst_vpi_gaussian_filter_adjust_size (self, size,
+          self->sigma_y);
+      self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
+          self->sigma_y);
+      break;
+    case PROP_SIGMA_X:
+      sigma = g_value_get_double (value);
+
+      self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
+          sigma);
+      break;
+    case PROP_SIGMA_Y:
+      sigma = g_value_get_double (value);
+
+      self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
+          sigma);
+      break;
+    case PROP_BOUNDARY_COND:
+      self->boundary_cond = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 void
 gst_vpi_gaussian_filter_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstVpiGaussianFilter *vpi_gaussian_filter = GST_VPI_GAUSSIAN_FILTER (object);
+  GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (object);
 
-  GST_DEBUG_OBJECT (vpi_gaussian_filter, "get_property");
+  GST_DEBUG_OBJECT (self, "get_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_SIZE_X:
+      g_value_set_int (value, self->size_x);
+      break;
+    case PROP_SIZE_Y:
+      g_value_set_int (value, self->size_y);
+      break;
+    case PROP_SIGMA_X:
+      g_value_set_double (value, self->sigma_x);
+      break;
+    case PROP_SIGMA_Y:
+      g_value_set_double (value, self->sigma_y);
+      break;
+    case PROP_BOUNDARY_COND:
+      g_value_set_enum (value, self->boundary_cond);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 void

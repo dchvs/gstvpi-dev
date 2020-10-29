@@ -77,8 +77,8 @@ gst_vpi_filter_init (GstVpiFilter * self)
       GstVpiFilterPrivate);
 
   priv->downstream_buffer_pool = NULL;
-  vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->vpi_stream);
-  cudaStreamCreate (&priv->cuda_stream);
+  priv->vpi_stream = NULL;
+  priv->cuda_stream = NULL;
 }
 
 static gboolean
@@ -91,12 +91,29 @@ gst_vpi_filter_start (GstBaseTransform * trans)
       GstVpiFilterPrivate);
   gboolean ret = TRUE;
   VPIStatus vpi_status = VPI_SUCCESS;
+  cudaError_t cuda_status = cudaSuccess;
 
   GST_DEBUG_OBJECT (self, "start");
 
   if (!vpi_filter_class->transform_image) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("Subclass did not implement transform_image()."), (NULL));
+    ret = FALSE;
+    goto out;
+  }
+
+  cuda_status = cudaStreamCreate (&priv->cuda_stream);
+  if (cudaSuccess != cuda_status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create CUDA stream."), (NULL));
+    ret = FALSE;
+    goto out;
+  }
+
+  vpi_status = vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->vpi_stream);
+  if (VPI_SUCCESS != vpi_status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create VPI stream."), (NULL));
     ret = FALSE;
     goto out;
   }

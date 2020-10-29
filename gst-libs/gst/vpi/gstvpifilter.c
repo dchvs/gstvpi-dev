@@ -30,6 +30,7 @@ typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 struct _GstVpiFilterPrivate
 {
   GstCudaBufferPool *downstream_buffer_pool;
+  VPIStream vpi_stream;
   cudaStream_t cuda_stream;
 };
 
@@ -76,6 +77,7 @@ gst_vpi_filter_init (GstVpiFilter * self)
       GstVpiFilterPrivate);
 
   priv->downstream_buffer_pool = NULL;
+  vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->vpi_stream);
   cudaStreamCreate (&priv->cuda_stream);
 }
 
@@ -84,7 +86,11 @@ gst_vpi_filter_start (GstBaseTransform * trans)
 {
   GstVpiFilter *self = GST_VPI_FILTER (trans);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  GstVpiFilterPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
   gboolean ret = TRUE;
+  VPIStatus vpi_status = VPI_SUCCESS;
 
   GST_DEBUG_OBJECT (self, "start");
 
@@ -92,7 +98,17 @@ gst_vpi_filter_start (GstBaseTransform * trans)
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("Subclass did not implement transform_image()."), (NULL));
     ret = FALSE;
+    goto out;
   }
+
+  vpi_status = vpiStreamWrapCuda (priv->cuda_stream, &priv->vpi_stream);
+  if (VPI_SUCCESS != vpi_status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not wrap CUDA stream."), (NULL));
+    ret = FALSE;
+  }
+
+out:
 
   return ret;
 }
@@ -127,8 +143,6 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  VPIStatus vpi_status = VPI_SUCCESS;
-  VPIStream vpi_stream;
   GstMapInfo in_minfo;
   GstMapInfo out_minfo;
 
@@ -161,19 +175,10 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
         out_minfo.data, cudaMemAttachSingle);
 
-    vpi_status = vpiStreamWrapCuda (priv->cuda_stream, &vpi_stream);
-    if (VPI_SUCCESS != vpi_status) {
-      GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-          ("Could not wrap CUDA stream."), (NULL));
-      ret = GST_FLOW_ERROR;
-      goto out;
-    }
-
-    ret = vpi_filter_class->transform_image (self, vpi_stream,
+    ret = vpi_filter_class->transform_image (self, priv->vpi_stream,
         in_vpi_meta->vpi_image, out_vpi_meta->vpi_image);
 
-    vpiStreamSync (vpi_stream);
-    vpiStreamDestroy (vpi_stream);
+    vpiStreamSync (priv->vpi_stream);
 
     /* Attach memory to global stream to detach it from CUDA stream */
     gst_vpi_filter_attach_mem_to_stream (self, NULL, in_minfo.data,
@@ -191,8 +196,6 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
         ("Cannot process buffers that do not contain the VPI meta."), (NULL));
     ret = GST_FLOW_ERROR;
   }
-
-out:
 
   return ret;
 }
@@ -297,6 +300,9 @@ gst_vpi_filter_finalize (GObject * object)
   GST_INFO_OBJECT (object, "Finalize VPI filter");
 
   g_clear_object (&priv->downstream_buffer_pool);
+
+  vpiStreamDestroy (priv->vpi_stream);
+  priv->vpi_stream = NULL;
 
   cudaStreamDestroy (priv->cuda_stream);
   priv->cuda_stream = NULL;

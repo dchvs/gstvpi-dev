@@ -127,6 +127,7 @@ gst_vpi_filter_attach_mem_to_stream (GstVpiFilter * self, cudaStream_t stream,
   cudaStreamSynchronize (stream);
 
   if (cudaSuccess != cuda_status) {
+    /* TODO: Fix this warning and make it an error */
     GST_WARNING_OBJECT (self,
         "Could not attach buffer to CUDA %s stream. Error: %s",
         stream == NULL ? "global" : "custom", cudaGetErrorString (cuda_status));

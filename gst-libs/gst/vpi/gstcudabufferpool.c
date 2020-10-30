@@ -12,6 +12,8 @@
 
 #include "gstcudabufferpool.h"
 
+#include <gst/video/video.h>
+
 #include "gstcudaallocator.h"
 #include "gstcudameta.h"
 

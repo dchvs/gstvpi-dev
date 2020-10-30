@@ -13,7 +13,7 @@
 #ifndef __GST_CUDA_BUFFER_POOL_H__
 #define __GST_CUDA_BUFFER_POOL_H__
 
-#include <gst/video/video.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 

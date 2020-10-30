@@ -18,9 +18,9 @@
 
 G_BEGIN_DECLS
 
-VPIImageType gst_vpi_video_format_to_image_type (GstVideoFormat video_format);
+VPIImageFormat gst_vpi_video_to_image_format (GstVideoFormat video_format);
 
-GstVideoFormat gst_vpi_image_type_to_video_format (VPIImageType image_type);
+GstVideoFormat gst_vpi_image_to_video_format (VPIImageFormat image_format);
 
 G_END_DECLS
 

@@ -12,46 +12,46 @@
 
 #include "gstvpi.h"
 
-VPIImageType
-gst_vpi_video_format_to_image_type (GstVideoFormat video_format)
+VPIImageFormat
+gst_vpi_video_to_image_format (GstVideoFormat video_format)
 {
-  VPIImageType ret;
+  VPIImageFormat ret;
 
   switch (video_format) {
     case GST_VIDEO_FORMAT_GRAY8:{
-      ret = VPI_IMAGE_TYPE_U8;
+      ret = VPI_IMAGE_FORMAT_U8;
       break;
     }
     case GST_VIDEO_FORMAT_GRAY16_BE:{
-      ret = VPI_IMAGE_TYPE_U16;
+      ret = VPI_IMAGE_FORMAT_U16;
       break;
     }
     case GST_VIDEO_FORMAT_GRAY16_LE:{
-      ret = VPI_IMAGE_TYPE_U16;
+      ret = VPI_IMAGE_FORMAT_U16;
       break;
     }
     case GST_VIDEO_FORMAT_NV12:{
-      ret = VPI_IMAGE_TYPE_NV12;
+      ret = VPI_IMAGE_FORMAT_NV12;
       break;
     }
     case GST_VIDEO_FORMAT_RGB:{
-      ret = VPI_IMAGE_TYPE_RGB8;
+      ret = VPI_IMAGE_FORMAT_RGB8;
       break;
     }
     case GST_VIDEO_FORMAT_RGBA:{
-      ret = VPI_IMAGE_TYPE_RGBA8;
+      ret = VPI_IMAGE_FORMAT_RGBA8;
       break;
     }
     case GST_VIDEO_FORMAT_BGR:{
-      ret = VPI_IMAGE_TYPE_BGR8;
+      ret = VPI_IMAGE_FORMAT_BGR8;
       break;
     }
     case GST_VIDEO_FORMAT_BGRA:{
-      ret = VPI_IMAGE_TYPE_BGRA8;
+      ret = VPI_IMAGE_FORMAT_BGRA8;
       break;
     }
     default:{
-      ret = VPI_IMAGE_TYPE_INVALID;
+      ret = VPI_IMAGE_FORMAT_INVALID;
     }
   }
 
@@ -59,36 +59,36 @@ gst_vpi_video_format_to_image_type (GstVideoFormat video_format)
 }
 
 GstVideoFormat
-gst_vpi_image_type_to_video_format (VPIImageType image_type)
+gst_vpi_image_to_video_format (VPIImageFormat image_format)
 {
   GstVideoFormat ret;
 
-  switch (image_type) {
-    case VPI_IMAGE_TYPE_U8:{
+  switch (image_format) {
+    case VPI_IMAGE_FORMAT_U8:{
       ret = GST_VIDEO_FORMAT_GRAY8;
       break;
     }
-    case VPI_IMAGE_TYPE_U16:{
+    case VPI_IMAGE_FORMAT_U16:{
       ret = GST_VIDEO_FORMAT_GRAY16_BE;
       break;
     }
-    case VPI_IMAGE_TYPE_NV12:{
+    case VPI_IMAGE_FORMAT_NV12:{
       ret = GST_VIDEO_FORMAT_NV12;
       break;
     }
-    case VPI_IMAGE_TYPE_RGB8:{
+    case VPI_IMAGE_FORMAT_RGB8:{
       ret = GST_VIDEO_FORMAT_RGB;
       break;
     }
-    case VPI_IMAGE_TYPE_RGBA8:{
+    case VPI_IMAGE_FORMAT_RGBA8:{
       ret = GST_VIDEO_FORMAT_RGBA;
       break;
     }
-    case VPI_IMAGE_TYPE_BGR8:{
+    case VPI_IMAGE_FORMAT_BGR8:{
       ret = GST_VIDEO_FORMAT_BGR;
       break;
     }
-    case VPI_IMAGE_TYPE_BGRA8:{
+    case VPI_IMAGE_FORMAT_BGRA8:{
       ret = GST_VIDEO_FORMAT_BGRA;
       break;
     }

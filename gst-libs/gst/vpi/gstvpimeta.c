@@ -82,7 +82,8 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
         minfo.data + GST_VIDEO_INFO_PLANE_OFFSET (video_info, i);
   }
 
-  status = vpiImageCreateCudaMemWrapper (&vpi_image_data, 0, &(ret->vpi_image));
+  status = vpiImageCreateCudaMemWrapper (&vpi_image_data, VPI_BACKEND_ALL,
+      &(ret->vpi_image));
   if (VPI_SUCCESS != status) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
     ret = NULL;

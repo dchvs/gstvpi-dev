@@ -67,7 +67,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 
   memset (&(vpi_image_data), 0, sizeof (vpi_image_data));
   vpi_image_data.type =
-      gst_vpi_video_format_to_image_type (GST_VIDEO_INFO_FORMAT (video_info));
+      gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (video_info));
   vpi_image_data.numPlanes = GST_VIDEO_INFO_N_PLANES (video_info);
   for (int i = 0; i < vpi_image_data.numPlanes; i++) {
     vpi_image_data.planes[i].width =
@@ -76,13 +76,13 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
     vpi_image_data.planes[i].height =
         GST_VIDEO_SUB_SCALE (video_info->finfo->h_sub[i],
         GST_VIDEO_INFO_HEIGHT (video_info));
-    vpi_image_data.planes[i].rowStride =
+    vpi_image_data.planes[i].pitchBytes =
         GST_VIDEO_INFO_PLANE_STRIDE (video_info, i);
     vpi_image_data.planes[i].data =
         minfo.data + GST_VIDEO_INFO_PLANE_OFFSET (video_info, i);
   }
 
-  status = vpiImageWrapCudaDeviceMem (&vpi_image_data, 0, &(ret->vpi_image));
+  status = vpiImageCreateCudaMemWrapper (&vpi_image_data, 0, &(ret->vpi_image));
   if (VPI_SUCCESS != status) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
     ret = NULL;

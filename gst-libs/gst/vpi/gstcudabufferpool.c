@@ -121,7 +121,7 @@ gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 
   klass = GST_CUDA_BUFFER_POOL_GET_CLASS (self);
   if (klass->set_config) {
-    if (!klass->set_config (pool, config)) {
+    if (!klass->set_config (self, config)) {
       GST_ERROR_OBJECT (self, "Unable to set configuration");
       goto error;
     }

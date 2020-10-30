@@ -117,7 +117,7 @@ gst_vpi_filter_start (GstBaseTransform * trans)
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("Could not create VPI stream."), (NULL));
     ret = FALSE;
-    goto out;
+    goto free_cuda_stream;
   }
 
   vpi_status = vpiStreamWrapCuda (priv->cuda_stream, &priv->vpi_stream);
@@ -125,10 +125,20 @@ gst_vpi_filter_start (GstBaseTransform * trans)
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("Could not wrap CUDA stream."), (NULL));
     ret = FALSE;
+    goto free_vpi_stream;
   }
 
-out:
+  goto out;
 
+free_vpi_stream:
+  vpiStreamDestroy (priv->vpi_stream);
+  priv->vpi_stream = NULL;
+
+free_cuda_stream:
+  cudaStreamDestroy (priv->cuda_stream);
+  priv->cuda_stream = NULL;
+
+out:
   return ret;
 }
 

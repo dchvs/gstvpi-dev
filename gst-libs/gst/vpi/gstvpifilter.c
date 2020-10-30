@@ -16,6 +16,8 @@
 
 #include "gstvpifilter.h"
 
+#include <cuda_runtime.h>
+
 #include "gstcudabufferpool.h"
 #include "gstcudameta.h"
 #include "gstvpimeta.h"
@@ -28,12 +30,14 @@ typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 struct _GstVpiFilterPrivate
 {
   GstCudaBufferPool *downstream_buffer_pool;
-  VPIStream stream;
+  VPIStream vpi_stream;
+  cudaStream_t cuda_stream;
 };
 
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe);
 static gboolean gst_vpi_filter_start (GstBaseTransform * trans);
+static gboolean gst_vpi_filter_stop (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_decide_allocation (GstBaseTransform * trans,
     GstQuery * query);
 static void gst_vpi_filter_finalize (GObject * object);
@@ -61,6 +65,7 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
   video_filter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_transform_frame);
   base_transform_class->start = GST_DEBUG_FUNCPTR (gst_vpi_filter_start);
+  base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_filter_stop);
   base_transform_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_decide_allocation);
   gobject_class->finalize = gst_vpi_filter_finalize;
@@ -74,7 +79,8 @@ gst_vpi_filter_init (GstVpiFilter * self)
       GstVpiFilterPrivate);
 
   priv->downstream_buffer_pool = NULL;
-  vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->stream);
+  priv->vpi_stream = NULL;
+  priv->cuda_stream = NULL;
 }
 
 static gboolean
@@ -82,7 +88,12 @@ gst_vpi_filter_start (GstBaseTransform * trans)
 {
   GstVpiFilter *self = GST_VPI_FILTER (trans);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  GstVpiFilterPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
   gboolean ret = TRUE;
+  VPIStatus vpi_status = VPI_SUCCESS;
+  cudaError_t cuda_status = cudaSuccess;
 
   GST_DEBUG_OBJECT (self, "start");
 
@@ -90,9 +101,66 @@ gst_vpi_filter_start (GstBaseTransform * trans)
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("Subclass did not implement transform_image()."), (NULL));
     ret = FALSE;
+    goto out;
   }
 
+  cuda_status = cudaStreamCreate (&priv->cuda_stream);
+  if (cudaSuccess != cuda_status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create CUDA stream."), (NULL));
+    ret = FALSE;
+    goto out;
+  }
+
+  vpi_status = vpiStreamCreate (VPI_DEVICE_TYPE_CUDA, &priv->vpi_stream);
+  if (VPI_SUCCESS != vpi_status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create VPI stream."), (NULL));
+    ret = FALSE;
+    goto free_cuda_stream;
+  }
+
+  vpi_status = vpiStreamWrapCuda (priv->cuda_stream, &priv->vpi_stream);
+  if (VPI_SUCCESS != vpi_status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not wrap CUDA stream."), (NULL));
+    ret = FALSE;
+    goto free_vpi_stream;
+  }
+
+  goto out;
+
+free_vpi_stream:
+  vpiStreamDestroy (priv->vpi_stream);
+  priv->vpi_stream = NULL;
+
+free_cuda_stream:
+  cudaStreamDestroy (priv->cuda_stream);
+  priv->cuda_stream = NULL;
+
+out:
   return ret;
+}
+
+static void
+gst_vpi_filter_attach_mem_to_stream (GstVpiFilter * self, cudaStream_t stream,
+    void *mem, gint attach_flag)
+{
+  cudaError_t cuda_status = cudaSuccess;
+
+  g_return_if_fail (self);
+  g_return_if_fail (mem);
+
+  cuda_status = cudaStreamAttachMemAsync (stream, mem, 0, attach_flag);
+
+  cudaStreamSynchronize (stream);
+
+  if (cudaSuccess != cuda_status) {
+    /* TODO: Fix this warning and make it an error */
+    GST_WARNING_OBJECT (self,
+        "Could not attach buffer to CUDA %s stream. Error: %s",
+        stream == NULL ? "global" : "custom", cudaGetErrorString (cuda_status));
+  }
 }
 
 static GstFlowReturn
@@ -105,6 +173,8 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  GstMapInfo in_minfo = GST_MAP_INFO_INIT;
+  GstMapInfo out_minfo = GST_MAP_INFO_INIT;
 
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);
@@ -127,10 +197,24 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   if (in_vpi_meta && out_vpi_meta) {
 
-    ret = vpi_filter_class->transform_image (self, priv->stream,
+    gst_buffer_map (inframe->buffer, &in_minfo, GST_MAP_READ);
+    gst_buffer_map (outframe->buffer, &out_minfo, GST_MAP_READWRITE);
+
+    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream, in_minfo.data,
+        cudaMemAttachSingle);
+    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
+        out_minfo.data, cudaMemAttachSingle);
+
+    ret = vpi_filter_class->transform_image (self, priv->vpi_stream,
         in_vpi_meta->vpi_image, out_vpi_meta->vpi_image);
 
-    vpiStreamSync (priv->stream);
+    vpiStreamSync (priv->vpi_stream);
+
+    /* Attach memory to global stream to detach it from CUDA stream */
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, in_minfo.data,
+        cudaMemAttachHost);
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, out_minfo.data,
+        cudaMemAttachHost);
 
     if (GST_FLOW_OK != ret) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -237,6 +321,26 @@ gst_vpi_filter_decide_allocation (GstBaseTransform * trans, GstQuery * query)
       priv->downstream_buffer_pool, query);
 }
 
+static gboolean
+gst_vpi_filter_stop (GstBaseTransform * trans)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (trans);
+  GstVpiFilterPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
+  gboolean ret = TRUE;
+
+  GST_DEBUG_OBJECT (self, "stop");
+
+  vpiStreamDestroy (priv->vpi_stream);
+  priv->vpi_stream = NULL;
+
+  cudaStreamDestroy (priv->cuda_stream);
+  priv->cuda_stream = NULL;
+
+  return ret;
+}
+
 static void
 gst_vpi_filter_finalize (GObject * object)
 {
@@ -246,12 +350,6 @@ gst_vpi_filter_finalize (GObject * object)
   GST_INFO_OBJECT (object, "Finalize VPI filter");
 
   g_clear_object (&priv->downstream_buffer_pool);
-
-  if (NULL != priv->stream) {
-    vpiStreamSync (priv->stream);
-    vpiStreamDestroy (priv->stream);
-    priv->stream = NULL;
-  }
 
   G_OBJECT_CLASS (gst_vpi_filter_parent_class)->finalize (object);
 }

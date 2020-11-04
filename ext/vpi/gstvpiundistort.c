@@ -35,7 +35,8 @@ struct _GstVpiUndistort
 /* prototypes */
 static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter *
     filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
-static gboolean gst_vpi_undistort_start (GstBaseTransform * trans);
+static gboolean gst_vpi_undistort_start (GstVpiFilter * filter, guint width,
+    guint height);
 static gboolean gst_vpi_undistort_stop (GstBaseTransform * trans);
 static void gst_vpi_undistort_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
@@ -75,9 +76,9 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
       "VPI based camera lens undistort element.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
+  vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_undistort_start);
   vpi_filter_class->transform_image =
       GST_DEBUG_FUNCPTR (gst_vpi_undistort_transform_image);
-  base_transform_class->start = GST_DEBUG_FUNCPTR (gst_vpi_undistort_start);
   base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_undistort_stop);
   gobject_class->set_property = gst_vpi_undistort_set_property;
   gobject_class->get_property = gst_vpi_undistort_get_property;
@@ -91,16 +92,14 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
 }
 
 static gboolean
-gst_vpi_undistort_start (GstBaseTransform * trans)
+gst_vpi_undistort_start (GstVpiFilter * filter, guint width, guint height)
 {
-  GstVpiUndistort *self = GST_VPI_UNDISTORT (trans);
+  GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
   VPIFisheyeLensDistortionModel fisheye;
   VPIWarpMap map;
   // TODO: Expose this parameters as element properties
-  guint width = 1280;
-  guint height = 800;
   gdouble sensor_width = 22.2;
   gdouble focal_length = 7.5;
   gdouble f = focal_length * width / sensor_width;
@@ -111,8 +110,6 @@ gst_vpi_undistort_start (GstBaseTransform * trans)
   {0, 1, 0, 0},
   {0, 0, 1, 0}
   };
-
-  GST_BASE_TRANSFORM_CLASS (gst_vpi_undistort_parent_class)->start (trans);
 
   GST_DEBUG_OBJECT (self, "start");
 

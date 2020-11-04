@@ -33,7 +33,7 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiBufferPool, gst_vpi_buffer_pool,
         "vpibufferpool", 0, "debug category for vpi buffer pool class"));
 
 /* prototypes */
-static gboolean gst_vpi_buffer_pool_set_config (GstBufferPool * pool,
+static gboolean gst_vpi_buffer_pool_set_config (GstCudaBufferPool * pool,
     GstStructure * config);
 static gboolean gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool,
     GstBuffer * buffer);
@@ -55,7 +55,7 @@ gst_vpi_buffer_pool_init (GstVpiBufferPool * self)
 }
 
 static gboolean
-gst_vpi_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
+gst_vpi_buffer_pool_set_config (GstCudaBufferPool * pool, GstStructure * config)
 {
   GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (pool);
   GstCaps *caps = NULL;

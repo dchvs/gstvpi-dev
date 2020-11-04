@@ -157,10 +157,10 @@ gst_vpi_filter_attach_mem_to_stream (GstVpiFilter * self, cudaStream_t stream,
   cudaStreamSynchronize (stream);
 
   if (cudaSuccess != cuda_status) {
-    /* TODO: Fix this warning and make it an error */
-    GST_WARNING_OBJECT (self,
-        "Could not attach buffer to CUDA %s stream. Error: %s",
-        stream == NULL ? "global" : "custom", cudaGetErrorString (cuda_status));
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not attach buffer to CUDA %s stream. Error: %s",
+            stream == NULL ? "global" : "custom",
+            cudaGetErrorString (cuda_status)), (NULL));
   }
 }
 
@@ -216,6 +216,9 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
         cudaMemAttachHost);
     gst_vpi_filter_attach_mem_to_stream (self, NULL, out_minfo.data,
         cudaMemAttachHost);
+
+    gst_buffer_unmap (inframe->buffer, &in_minfo);
+    gst_buffer_unmap (outframe->buffer, &out_minfo);
 
     if (GST_FLOW_OK != ret) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

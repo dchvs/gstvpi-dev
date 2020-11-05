@@ -99,7 +99,7 @@ gst_vpi_undistort_start (GstVpiFilter * filter, guint width, guint height)
   VPIStatus status = VPI_SUCCESS;
   VPIFisheyeLensDistortionModel fisheye;
   VPIWarpMap map;
-  // TODO: Expose this parameters as element properties
+  /* TODO: Expose this parameters as element properties */
   gdouble sensor_width = 22.2;
   gdouble focal_length = 7.5;
   gdouble f = focal_length * width / sensor_width;

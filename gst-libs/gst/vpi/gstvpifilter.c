@@ -162,7 +162,7 @@ gst_vpi_filter_set_info (GstVideoFilter * filter, GstCaps *
   height = GST_VIDEO_INFO_HEIGHT (in_info);
 
   if (vpi_filter_class->start) {
-    // Call child class start method when caps are already known
+    /* Call child class start method when caps are already known */
     ret = vpi_filter_class->start (self, width, height);
   }
 

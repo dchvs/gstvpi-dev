@@ -26,10 +26,21 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "NV12")
 
+#define DEFAULT_WIDTH 1280
+#define DEFAULT_HEIGHT 800
+#define DEFAULT_SENSOR_WIDTH 22.2
+#define DEFAULT_FOCAL_LENGTH 7.5
+#define DEFAULT_F_PARAMETER (DEFAULT_FOCAL_LENGTH * DEFAULT_WIDTH / DEFAULT_SENSOR_WIDTH)
+
+#define DEFAULT_PROP_EXTRINSIC_MATRIX { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0} }
+#define DEFAULT_PROP_INTRINSIC_MATRIX { {DEFAULT_F_PARAMETER, 0.0, DEFAULT_WIDTH / 2.0}, {0.0, DEFAULT_F_PARAMETER, DEFAULT_HEIGHT / 2.0} }
+
 struct _GstVpiUndistort
 {
   GstVpiFilter parent;
   VPIPayload warp;
+  VPICameraExtrinsic extrinsic;
+  VPICameraIntrinsic intrinsic;
 };
 
 /* prototypes */
@@ -46,7 +57,15 @@ static void gst_vpi_undistort_finalize (GObject * object);
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_EXTRINSIC_MATRIX,
+  PROP_INTRINSIC_MATRIX
+};
+
+enum
+{
+  EXTRINSIC,
+  INTRINSIC
 };
 
 /* class initialization */
@@ -83,12 +102,45 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
   gobject_class->set_property = gst_vpi_undistort_set_property;
   gobject_class->get_property = gst_vpi_undistort_get_property;
   gobject_class->finalize = gst_vpi_undistort_finalize;
+
+  g_object_class_install_property (gobject_class, PROP_EXTRINSIC_MATRIX,
+      gst_param_spec_array ("extrinsic",
+          "Extrinsic calibration matrix",
+          "3x4 matrix resulting of concatenation of 3x3 rotation matrix with "
+          "3x1 vector containing the position of the origin world coordinate "
+          "system expressed in coordinates of camera-centered system.\n"
+          "Example: <<1.0,0.0,0.0,0.0>,<0.0,1.0,0.0,0.0>,<0.0,0.0,1.0,0.0>>",
+          gst_param_spec_array ("e-matrix-rows", "rows", "rows",
+              g_param_spec_double ("e-matrix-cols", "cols", "cols",
+                  -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                  (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_INTRINSIC_MATRIX,
+      gst_param_spec_array ("intrinsic",
+          "Intrinsic calibration matrix",
+          "2x3 matrix with the first row containing the focal length in pixels "
+          "in x, the skew and the principal point in x and in the second row 0,"
+          " the focal length in pixels in y and principal point in y.\n"
+          "Example: <<fx,s,cx>,<0.0,fy,cy>>",
+          gst_param_spec_array ("i-matrix-rows", "rows", "rows",
+              g_param_spec_double ("i-matrix-cols", "cols", "cols",
+                  0, G_MAXDOUBLE, 0,
+                  (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_undistort_init (GstVpiUndistort * self)
 {
+  VPICameraExtrinsic extrinsic = DEFAULT_PROP_EXTRINSIC_MATRIX;
+  VPICameraIntrinsic intrinsic = DEFAULT_PROP_INTRINSIC_MATRIX;
+
   self->warp = NULL;
+  memcpy (&self->extrinsic, &extrinsic, sizeof (extrinsic));
+  memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
 }
 
 static gboolean
@@ -102,15 +154,6 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   VPIWarpMap map = { 0 };
   guint width = 0;
   guint height = 0;
-  /* TODO: Expose this parameters as element properties */
-  gdouble sensor_width = 22.2;
-  gdouble focal_length = 7.5;
-  gdouble f = 0;
-  VPICameraIntrinsic intrinsic = { 0 };
-  VPICameraExtrinsic extrinsic = { {1, 0, 0, 0},
-  {0, 1, 0, 0},
-  {0, 0, 1, 0}
-  };
 
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);
@@ -123,11 +166,6 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
 
-  f = focal_length * width / sensor_width;
-  intrinsic[0][0] = intrinsic[1][1] = f;
-  intrinsic[0][2] = width / 2.0;
-  intrinsic[1][2] = height / 2.0;
-
   map.grid.numHorizRegions = 1;
   map.grid.numVertRegions = 1;
   map.grid.regionWidth[0] = width;
@@ -136,14 +174,16 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   map.grid.vertInterval[0] = 1;
   vpiWarpMapAllocData (&map);
 
+  /* TODO: Expose this parameters as element properties */
   fisheye.mapping = VPI_FISHEYE_EQUIDISTANT;
   fisheye.k1 = -0.126;
   fisheye.k2 = 0.004;
   fisheye.k3 = 0;
   fisheye.k4 = 0;
 
-  status = vpiWarpMapGenerateFromFisheyeLensDistortionModel (intrinsic,
-      extrinsic, intrinsic, &fisheye, &map);
+  /* TODO: Adjust calibration matrices if the default were used */
+  status = vpiWarpMapGenerateFromFisheyeLensDistortionModel (self->intrinsic,
+      self->extrinsic, self->intrinsic, &fisheye, &map);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -192,34 +232,140 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   return ret;
 }
 
+static void
+gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
+    const GValue * array, guint matrix_type)
+{
+  guint rows = 0;
+  guint cols = 0;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (array);
+
+  rows = gst_value_array_get_size (array);
+  cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
+
+  if (EXTRINSIC == matrix_type && 3 == rows && 4 == cols) {
+    for (i = 0; i < rows; i++) {
+      const GValue *row = gst_value_array_get_value (array, i);
+      for (j = 0; j < cols; j++) {
+        self->extrinsic[i][j] =
+            g_value_get_double (gst_value_array_get_value (row, j));
+      }
+    }
+  } else if (INTRINSIC == matrix_type && 2 == rows && 3 == cols) {
+    for (i = 0; i < rows; i++) {
+      const GValue *row = gst_value_array_get_value (array, i);
+      for (j = 0; j < cols; j++) {
+        self->intrinsic[i][j] =
+            g_value_get_double (gst_value_array_get_value (row, j));
+      }
+    }
+  } else {
+    GST_WARNING_OBJECT (self, "Invalid %s matrix dimensions. Using default.",
+        matrix_type == EXTRINSIC ? "extrinsic" : "intrinsic");
+  }
+}
+
+static void
+gst_vpi_undistort_convert_calib_matrix_to_gst_array (GstVpiUndistort * self,
+    GValue * array, guint matrix_type)
+{
+  GValue row = G_VALUE_INIT;
+  GValue value = G_VALUE_INIT;
+  guint rows = 0;
+  guint cols = 0;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (array);
+
+  if (EXTRINSIC == matrix_type) {
+    rows = 3;
+    cols = 4;
+
+    for (i = 0; i < rows; i++) {
+      g_value_init (&row, GST_TYPE_ARRAY);
+
+      for (j = 0; j < cols; i++) {
+        g_value_init (&value, G_TYPE_DOUBLE);
+        g_value_set_double (&value, self->extrinsic[i][j]);
+        gst_value_array_append_value (&row, &value);
+        g_value_unset (&value);
+      }
+    }
+    gst_value_array_append_value (array, &row);
+    g_value_unset (&row);
+  } else if (INTRINSIC == matrix_type) {
+    rows = 2;
+    cols = 3;
+
+    for (i = 0; i < rows; i++) {
+      g_value_init (&row, GST_TYPE_ARRAY);
+
+      for (j = 0; j < cols; i++) {
+        g_value_init (&value, G_TYPE_DOUBLE);
+        g_value_set_double (&value, self->intrinsic[i][j]);
+        gst_value_array_append_value (&row, &value);
+        g_value_unset (&value);
+      }
+    }
+    gst_value_array_append_value (array, &row);
+    g_value_unset (&row);
+  }
+}
+
 void
 gst_vpi_undistort_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstVpiUndistort *vpi_undistort = GST_VPI_UNDISTORT (object);
+  GstVpiUndistort *self = GST_VPI_UNDISTORT (object);
 
-  GST_DEBUG_OBJECT (vpi_undistort, "set_property");
+  GST_DEBUG_OBJECT (self, "set_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_EXTRINSIC_MATRIX:
+      gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
+          EXTRINSIC);
+      break;
+    case PROP_INTRINSIC_MATRIX:
+      gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
+          INTRINSIC);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 void
 gst_vpi_undistort_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstVpiUndistort *vpi_undistort = GST_VPI_UNDISTORT (object);
+  GstVpiUndistort *self = GST_VPI_UNDISTORT (object);
 
-  GST_DEBUG_OBJECT (vpi_undistort, "get_property");
+  GST_DEBUG_OBJECT (self, "get_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_EXTRINSIC_MATRIX:
+      gst_vpi_undistort_convert_calib_matrix_to_gst_array (self, value,
+          EXTRINSIC);
+      break;
+    case PROP_INTRINSIC_MATRIX:
+      gst_vpi_undistort_convert_calib_matrix_to_gst_array (self, value,
+          INTRINSIC);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 static gboolean

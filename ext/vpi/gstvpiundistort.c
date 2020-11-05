@@ -95,27 +95,38 @@ static gboolean
 gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     GstVideoInfo * out_info)
 {
-  /* TODO: Add pointer guard */
-  GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
+  GstVpiUndistort *self = NULL;
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
   VPIFisheyeLensDistortionModel fisheye = { 0 };
   VPIWarpMap map = { 0 };
-  guint width = GST_VIDEO_INFO_WIDTH (in_info);
-  guint height = GST_VIDEO_INFO_HEIGHT (in_info);
+  guint width = 0;
+  guint height = 0;
   /* TODO: Expose this parameters as element properties */
   gdouble sensor_width = 22.2;
   gdouble focal_length = 7.5;
-  gdouble f = focal_length * width / sensor_width;
-  VPICameraIntrinsic intrinsic = { {f, 0, width / 2.0},
-  {0, f, height / 2.0}
-  };
+  gdouble f = 0;
+  VPICameraIntrinsic intrinsic = { 0 };
   VPICameraExtrinsic extrinsic = { {1, 0, 0, 0},
   {0, 1, 0, 0},
   {0, 0, 1, 0}
   };
 
+  g_return_val_if_fail (filter, FALSE);
+  g_return_val_if_fail (in_info, FALSE);
+  g_return_val_if_fail (out_info, FALSE);
+
+  self = GST_VPI_UNDISTORT (filter);
+
   GST_DEBUG_OBJECT (self, "start");
+
+  width = GST_VIDEO_INFO_WIDTH (in_info);
+  height = GST_VIDEO_INFO_HEIGHT (in_info);
+
+  f = focal_length * width / sensor_width;
+  intrinsic[0][0] = intrinsic[1][1] = f;
+  intrinsic[0][2] = width / 2.0;
+  intrinsic[1][2] = height / 2.0;
 
   map.grid.numHorizRegions = 1;
   map.grid.numVertRegions = 1;

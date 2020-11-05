@@ -36,6 +36,8 @@ struct _GstVpiFilterPrivate
 
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe);
+static gboolean gst_vpi_filter_set_info (GstVideoFilter * filter, GstCaps *
+    incaps, GstVideoInfo * in_info, GstCaps * outcaps, GstVideoInfo * out_info);
 static gboolean gst_vpi_filter_start (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_stop (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_decide_allocation (GstBaseTransform * trans,
@@ -64,6 +66,7 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
 
   video_filter_class->transform_frame =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_transform_frame);
+  video_filter_class->set_info = GST_DEBUG_FUNCPTR (gst_vpi_filter_set_info);
   base_transform_class->start = GST_DEBUG_FUNCPTR (gst_vpi_filter_start);
   base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_filter_stop);
   base_transform_class->decide_allocation =
@@ -140,6 +143,24 @@ free_cuda_stream:
   priv->cuda_stream = NULL;
 
 out:
+  return ret;
+}
+
+static gboolean
+gst_vpi_filter_set_info (GstVideoFilter * filter, GstCaps *
+    incaps, GstVideoInfo * in_info, GstCaps * outcaps, GstVideoInfo * out_info)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (filter);
+  GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
+  gboolean ret = TRUE;
+
+  GST_DEBUG_OBJECT (self, "set_info");
+
+  if (vpi_filter_class->start) {
+    /* Call child class start method when caps are already known */
+    ret = vpi_filter_class->start (self, in_info, out_info);
+  }
+
   return ret;
 }
 

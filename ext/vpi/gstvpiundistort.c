@@ -99,11 +99,11 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
-  VPIFisheyeLensDistortionModel fisheye;
-  VPIWarpMap map;
-  /* TODO: Expose this parameters as element properties */
+  VPIFisheyeLensDistortionModel fisheye = { 0 };
+  VPIWarpMap map = { 0 };
   guint width = GST_VIDEO_INFO_WIDTH (in_info);
   guint height = GST_VIDEO_INFO_HEIGHT (in_info);
+  /* TODO: Expose this parameters as element properties */
   gdouble sensor_width = 22.2;
   gdouble focal_length = 7.5;
   gdouble f = focal_length * width / sensor_width;
@@ -117,7 +117,6 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   GST_DEBUG_OBJECT (self, "start");
 
-  memset (&map, 0, sizeof (map));
   map.grid.numHorizRegions = 1;
   map.grid.numVertRegions = 1;
   map.grid.regionWidth[0] = width;
@@ -126,7 +125,6 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   map.grid.vertInterval[0] = 1;
   vpiWarpMapAllocData (&map);
 
-  memset (&fisheye, 0, sizeof (fisheye));
   fisheye.mapping = VPI_FISHEYE_EQUIDISTANT;
   fisheye.k1 = -0.126;
   fisheye.k2 = 0.004;

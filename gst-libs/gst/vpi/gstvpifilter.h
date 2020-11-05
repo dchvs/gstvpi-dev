@@ -29,7 +29,8 @@ struct _GstVpiFilterClass
 {
   GstVideoFilterClass parent_class;
 
-  gboolean (*start) (GstVpiFilter *self, guint width, guint height);
+  gboolean (*start) (GstVpiFilter *self, GstVideoInfo *in_info, GstVideoInfo
+                     *out_info);
   GstFlowReturn (*transform_image) (GstVpiFilter *self, VPIStream stream,
                                     VPIImage in_image, VPIImage out_image);
 };

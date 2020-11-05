@@ -152,18 +152,13 @@ gst_vpi_filter_set_info (GstVideoFilter * filter, GstCaps *
 {
   GstVpiFilter *self = GST_VPI_FILTER (filter);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
-  guint width = 0;
-  guint height = 0;
   gboolean ret = TRUE;
 
   GST_DEBUG_OBJECT (self, "set_info");
 
-  width = GST_VIDEO_INFO_WIDTH (in_info);
-  height = GST_VIDEO_INFO_HEIGHT (in_info);
-
   if (vpi_filter_class->start) {
     /* Call child class start method when caps are already known */
-    ret = vpi_filter_class->start (self, width, height);
+    ret = vpi_filter_class->start (self, in_info, out_info);
   }
 
   return ret;

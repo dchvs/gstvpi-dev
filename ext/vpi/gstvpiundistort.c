@@ -35,8 +35,8 @@ struct _GstVpiUndistort
 /* prototypes */
 static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter *
     filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
-static gboolean gst_vpi_undistort_start (GstVpiFilter * filter, guint width,
-    guint height);
+static gboolean gst_vpi_undistort_start (GstVpiFilter * self, GstVideoInfo *
+    in_info, GstVideoInfo * out_info);
 static gboolean gst_vpi_undistort_stop (GstBaseTransform * trans);
 static void gst_vpi_undistort_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
@@ -92,14 +92,18 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
 }
 
 static gboolean
-gst_vpi_undistort_start (GstVpiFilter * filter, guint width, guint height)
+gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
+    GstVideoInfo * out_info)
 {
+  /* TODO: Add pointer guard */
   GstVpiUndistort *self = GST_VPI_UNDISTORT (filter);
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
   VPIFisheyeLensDistortionModel fisheye;
   VPIWarpMap map;
   /* TODO: Expose this parameters as element properties */
+  guint width = GST_VIDEO_INFO_WIDTH (in_info);
+  guint height = GST_VIDEO_INFO_HEIGHT (in_info);
   gdouble sensor_width = 22.2;
   gdouble focal_length = 7.5;
   gdouble f = focal_length * width / sensor_width;

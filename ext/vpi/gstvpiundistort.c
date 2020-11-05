@@ -26,14 +26,11 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "NV12")
 
-#define DEFAULT_WIDTH 1280
-#define DEFAULT_HEIGHT 800
 #define DEFAULT_SENSOR_WIDTH 22.2
 #define DEFAULT_FOCAL_LENGTH 7.5
-#define DEFAULT_F_PARAMETER (DEFAULT_FOCAL_LENGTH * DEFAULT_WIDTH / DEFAULT_SENSOR_WIDTH)
 
 #define DEFAULT_PROP_EXTRINSIC_MATRIX { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0} }
-#define DEFAULT_PROP_INTRINSIC_MATRIX { {DEFAULT_F_PARAMETER, 0.0, DEFAULT_WIDTH / 2.0}, {0.0, DEFAULT_F_PARAMETER, DEFAULT_HEIGHT / 2.0} }
+#define DEFAULT_PROP_INTRINSIC_MATRIX { 0 }
 
 struct _GstVpiUndistort
 {
@@ -41,6 +38,7 @@ struct _GstVpiUndistort
   VPIPayload warp;
   VPICameraExtrinsic extrinsic;
   VPICameraIntrinsic intrinsic;
+  gboolean set_intrinsic_matrix;
 };
 
 /* prototypes */
@@ -122,7 +120,8 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
           "Intrinsic calibration matrix",
           "2x3 matrix with the first row containing the focal length in pixels "
           "in x, the skew and the principal point in x and in the second row 0,"
-          " the focal length in pixels in y and principal point in y.\n"
+          " the focal length in pixels in y and principal point in y. If not "
+          "provided a default one will be created.\n"
           "Example: <<fx,s,cx>,<0.0,fy,cy>>",
           gst_param_spec_array ("i-matrix-rows", "rows", "rows",
               g_param_spec_double ("i-matrix-cols", "cols", "cols",
@@ -139,6 +138,7 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
   VPICameraIntrinsic intrinsic = DEFAULT_PROP_INTRINSIC_MATRIX;
 
   self->warp = NULL;
+  self->set_intrinsic_matrix = FALSE;
   memcpy (&self->extrinsic, &extrinsic, sizeof (extrinsic));
   memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
 }
@@ -181,7 +181,15 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   fisheye.k3 = 0;
   fisheye.k4 = 0;
 
-  /* TODO: Adjust calibration matrices if the default were used */
+  /* Create default intrinsic matrix if not provided by user */
+  if (!self->set_intrinsic_matrix) {
+    gdouble f = DEFAULT_FOCAL_LENGTH * width / DEFAULT_SENSOR_WIDTH;
+    VPICameraIntrinsic intrinsic = { {f, 0, width / 2.0}, {0, f, height / 2.0} };
+    GST_WARNING_OBJECT (self,
+        "Calibration matrix not set. Using default matrix.");
+    memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
+  }
+
   status = vpiWarpMapGenerateFromFisheyeLensDistortionModel (self->intrinsic,
       self->extrinsic, self->intrinsic, &fisheye, &map);
 
@@ -232,7 +240,7 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   return ret;
 }
 
-static void
+static gboolean
 gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
     const GValue * array, guint matrix_type)
 {
@@ -240,13 +248,15 @@ gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
   guint cols = 0;
   guint i = 0;
   guint j = 0;
+  gboolean ret = TRUE;
 
-  g_return_if_fail (self);
-  g_return_if_fail (array);
+  g_return_val_if_fail (self, FALSE);
+  g_return_val_if_fail (array, FALSE);
 
   rows = gst_value_array_get_size (array);
   cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
 
+  /* TODO: Refactor */
   if (EXTRINSIC == matrix_type && 3 == rows && 4 == cols) {
     for (i = 0; i < rows; i++) {
       const GValue *row = gst_value_array_get_value (array, i);
@@ -264,9 +274,11 @@ gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
       }
     }
   } else {
-    GST_WARNING_OBJECT (self, "Invalid %s matrix dimensions. Using default.",
+    ret = FALSE;
+    GST_WARNING_OBJECT (self, "Invalid %s matrix dimensions.",
         matrix_type == EXTRINSIC ? "extrinsic" : "intrinsic");
   }
+  return ret;
 }
 
 static void
@@ -283,6 +295,7 @@ gst_vpi_undistort_convert_calib_matrix_to_gst_array (GstVpiUndistort * self,
   g_return_if_fail (self);
   g_return_if_fail (array);
 
+  /* TODO: Refactor */
   if (EXTRINSIC == matrix_type) {
     rows = 3;
     cols = 4;
@@ -333,7 +346,8 @@ gst_vpi_undistort_set_property (GObject * object, guint property_id,
           EXTRINSIC);
       break;
     case PROP_INTRINSIC_MATRIX:
-      gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
+      self->set_intrinsic_matrix =
+          gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
           INTRINSIC);
       break;
     default:

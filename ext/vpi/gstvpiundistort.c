@@ -474,40 +474,30 @@ gst_vpi_undistort_convert_calib_matrix_to_gst_array (GstVpiUndistort * self,
   g_return_if_fail (self);
   g_return_if_fail (array);
 
-  /* TODO: Refactor */
   if (EXTRINSIC == matrix_type) {
     rows = 3;
     cols = 4;
-
-    for (i = 0; i < rows; i++) {
-      g_value_init (&row, GST_TYPE_ARRAY);
-
-      for (j = 0; j < cols; j++) {
-        g_value_init (&value, G_TYPE_DOUBLE);
-        g_value_set_double (&value, self->extrinsic[i][j]);
-        gst_value_array_append_value (&row, &value);
-        g_value_unset (&value);
-      }
-      gst_value_array_append_value (array, &row);
-      g_value_unset (&row);
-    }
-
-  } else if (INTRINSIC == matrix_type) {
+  } else {
     rows = 2;
     cols = 3;
+  }
 
-    for (i = 0; i < rows; i++) {
-      g_value_init (&row, GST_TYPE_ARRAY);
+  for (i = 0; i < rows; i++) {
+    g_value_init (&row, GST_TYPE_ARRAY);
 
-      for (j = 0; j < cols; j++) {
-        g_value_init (&value, G_TYPE_DOUBLE);
+    for (j = 0; j < cols; j++) {
+      g_value_init (&value, G_TYPE_DOUBLE);
+      if (EXTRINSIC == matrix_type) {
+        g_value_set_double (&value, self->extrinsic[i][j]);
+      } else {
         g_value_set_double (&value, self->intrinsic[i][j]);
-        gst_value_array_append_value (&row, &value);
-        g_value_unset (&value);
       }
-      gst_value_array_append_value (array, &row);
-      g_value_unset (&row);
+      gst_value_array_append_value (&row, &value);
+      g_value_unset (&value);
     }
+
+    gst_value_array_append_value (array, &row);
+    g_value_unset (&row);
   }
 }
 

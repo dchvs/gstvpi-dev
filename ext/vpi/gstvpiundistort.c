@@ -429,7 +429,9 @@ gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
   guint cols = 0;
   guint i = 0;
   guint j = 0;
+  gdouble value = 0;
   gboolean ret = TRUE;
+  const GValue *row = NULL;
 
   g_return_val_if_fail (self, FALSE);
   g_return_val_if_fail (array, FALSE);
@@ -437,21 +439,17 @@ gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
   rows = gst_value_array_get_size (array);
   cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
 
-  /* TODO: Refactor */
-  if (EXTRINSIC == matrix_type && 3 == rows && 4 == cols) {
+  if ((EXTRINSIC == matrix_type && 3 == rows && 4 == cols)
+      || (INTRINSIC == matrix_type && 2 == rows && 3 == cols)) {
     for (i = 0; i < rows; i++) {
-      const GValue *row = gst_value_array_get_value (array, i);
+      row = gst_value_array_get_value (array, i);
       for (j = 0; j < cols; j++) {
-        self->extrinsic[i][j] =
-            g_value_get_double (gst_value_array_get_value (row, j));
-      }
-    }
-  } else if (INTRINSIC == matrix_type && 2 == rows && 3 == cols) {
-    for (i = 0; i < rows; i++) {
-      const GValue *row = gst_value_array_get_value (array, i);
-      for (j = 0; j < cols; j++) {
-        self->intrinsic[i][j] =
-            g_value_get_double (gst_value_array_get_value (row, j));
+        value = g_value_get_double (gst_value_array_get_value (row, j));
+        if (EXTRINSIC == matrix_type) {
+          self->extrinsic[i][j] = value;
+        } else {
+          self->intrinsic[i][j] = value;
+        }
       }
     }
   } else {

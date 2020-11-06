@@ -34,6 +34,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 
 #define DEFAULT_PROP_EXTRINSIC_MATRIX { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0} }
 #define DEFAULT_PROP_INTRINSIC_MATRIX { 0 }
+#define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_CATMULL_ROM
 #define DEFAULT_PROP_DISTORTION_MODEL FISHEYE
 #define DEFAULT_PROP_FISHEYE_MAPPING VPI_FISHEYE_EQUIDISTANT
 #define DEFAULT_PROP_COEF 0.0
@@ -46,6 +47,7 @@ struct _GstVpiUndistort
   VPICameraExtrinsic extrinsic;
   VPICameraIntrinsic intrinsic;
   gboolean set_intrinsic_matrix;
+  gint interpolator;
   gint distortion_model;
   gint fisheye_mapping;
   gdouble coefficients[8];
@@ -68,6 +70,7 @@ enum
   PROP_0,
   PROP_EXTRINSIC_MATRIX,
   PROP_INTRINSIC_MATRIX,
+  PROP_INTERPOLATOR,
   PROP_DISTORTION_MODEL,
   PROP_FISHEYE_MAPPING,
   PROP_K1,
@@ -136,6 +139,28 @@ vpi_fisheye_mapping_enum_get_type (void)
   return vpi_fisheye_mapping_enum_type;
 }
 
+GType
+vpi_interpolator_enum_get_type (void)
+{
+  static GType vpi_interpolator_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_INTERP_NEAREST, "Nearest neighbor interpolation.",
+        "nearest"},
+    {VPI_INTERP_LINEAR, "Fast linear interpolation.",
+        "linear"},
+    {VPI_INTERP_CATMULL_ROM, "Fast Catmull-Rom cubic interpolation.",
+        "catmull"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_interpolator_enum_type) {
+    vpi_interpolator_enum_type =
+        g_enum_register_static ("VpiInterpolator", values);
+  }
+
+  return vpi_interpolator_enum_type;
+}
+
 /* class initialization */
 
 G_DEFINE_TYPE_WITH_CODE (GstVpiUndistort, gst_vpi_undistort,
@@ -198,6 +223,12 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
                   0, G_MAXDOUBLE, 0,
                   (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
               (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_INTERPOLATOR,
+      g_param_spec_enum ("interpolator", "Interpolation method",
+          "Interpolation method to be used.",
+          VPI_INTERPOLATORS_ENUM, DEFAULT_PROP_INTERPOLATOR,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_DISTORTION_MODEL,
@@ -275,6 +306,7 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
 
   self->warp = NULL;
   self->set_intrinsic_matrix = FALSE;
+  self->interpolator = DEFAULT_PROP_INTERPOLATOR;
   self->distortion_model = DEFAULT_PROP_DISTORTION_MODEL;
   self->fisheye_mapping = DEFAULT_PROP_FISHEYE_MAPPING;
   memcpy (&self->extrinsic, &extrinsic, sizeof (extrinsic));
@@ -380,7 +412,7 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   GST_LOG_OBJECT (self, "Transform image");
 
   status = vpiSubmitRemap (stream, self->warp, in_image, out_image,
-      VPI_INTERP_LINEAR, VPI_BOUNDARY_COND_ZERO);
+      self->interpolator, VPI_BOUNDARY_COND_ZERO);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -500,6 +532,9 @@ gst_vpi_undistort_set_property (GObject * object, guint property_id,
           gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
           INTRINSIC);
       break;
+    case PROP_INTERPOLATOR:
+      self->interpolator = g_value_get_enum (value);
+      break;
     case PROP_DISTORTION_MODEL:
       self->distortion_model = g_value_get_enum (value);
       break;
@@ -543,6 +578,9 @@ gst_vpi_undistort_get_property (GObject * object, guint property_id,
     case PROP_INTRINSIC_MATRIX:
       gst_vpi_undistort_convert_calib_matrix_to_gst_array (self, value,
           INTRINSIC);
+      break;
+    case PROP_INTERPOLATOR:
+      g_value_set_enum (value, self->interpolator);
       break;
     case PROP_DISTORTION_MODEL:
       g_value_set_enum (value, self->distortion_model);

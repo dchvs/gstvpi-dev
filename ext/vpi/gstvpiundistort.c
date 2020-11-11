@@ -434,42 +434,62 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   return ret;
 }
 
-static gboolean
-gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
-    const GValue * array, guint matrix_type)
+static float *
+gst_array_to_matrix (const GValue * array, guint * rows, guint * cols)
 {
-  guint rows = 0;
-  guint cols = 0;
+  const GValue *row = NULL;
+  float *matrix = NULL;
+  float value = 0;
   guint i = 0;
   guint j = 0;
-  gdouble value = 0;
+
+  g_return_val_if_fail (array, NULL);
+
+  *rows = gst_value_array_get_size (array);
+  *cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
+
+  matrix = malloc (*rows * *cols * sizeof (*matrix));
+
+  for (i = 0; i < *rows; i++) {
+    row = gst_value_array_get_value (array, i);
+    for (j = 0; j < *cols; j++) {
+      value = g_value_get_double (gst_value_array_get_value (row, j));
+      matrix[i * *cols + j] = value;
+    }
+  }
+  return matrix;
+}
+
+static gboolean
+gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
+    const GValue * array, guint matrix_type)
+{
+  float *matrix = NULL;
+  guint rows = 0;
+  guint cols = 0;
   gboolean ret = TRUE;
-  const GValue *row = NULL;
 
   g_return_val_if_fail (self, FALSE);
   g_return_val_if_fail (array, FALSE);
 
-  rows = gst_value_array_get_size (array);
-  cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
+  matrix = gst_array_to_matrix (array, &rows, &cols);
 
-  if ((EXTRINSIC == matrix_type && 3 == rows && 4 == cols)
-      || (INTRINSIC == matrix_type && 2 == rows && 3 == cols)) {
-    for (i = 0; i < rows; i++) {
-      row = gst_value_array_get_value (array, i);
-      for (j = 0; j < cols; j++) {
-        value = g_value_get_double (gst_value_array_get_value (row, j));
-        if (EXTRINSIC == matrix_type) {
-          self->extrinsic[i][j] = value;
-        } else {
-          self->intrinsic[i][j] = value;
-        }
-      }
-    }
+  g_return_val_if_fail (matrix, FALSE);
+
+  if (EXTRINSIC == matrix_type && 3 == rows && 4 == cols) {
+    memcpy (&self->extrinsic, matrix, rows * cols * sizeof (*matrix));
+
+  } else if (INTRINSIC == matrix_type && 2 == rows && 3 == cols) {
+    memcpy (&self->intrinsic, matrix, rows * cols * sizeof (*matrix));
+
   } else {
     ret = FALSE;
     GST_WARNING_OBJECT (self, "Invalid %dx%d dimensions for %s matrix.", rows,
         cols, matrix_type == EXTRINSIC ? "extrinsic 3x4" : "intrinsic 2x3");
   }
+
+  free (matrix);
+
   return ret;
 }
 
@@ -525,13 +545,11 @@ gst_vpi_undistort_set_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_EXTRINSIC_MATRIX:
-      gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
-          EXTRINSIC);
+      gst_vpi_undistort_set_calibration_matrix (self, value, EXTRINSIC);
       break;
     case PROP_INTRINSIC_MATRIX:
       self->set_intrinsic_matrix =
-          gst_vpi_undistort_convert_gst_array_to_calib_matrix (self, value,
-          INTRINSIC);
+          gst_vpi_undistort_set_calibration_matrix (self, value, INTRINSIC);
       break;
     case PROP_INTERPOLATOR:
       self->interpolator = g_value_get_enum (value);

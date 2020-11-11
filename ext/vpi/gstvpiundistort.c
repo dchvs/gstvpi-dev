@@ -467,8 +467,8 @@ gst_vpi_undistort_convert_gst_array_to_calib_matrix (GstVpiUndistort * self,
     }
   } else {
     ret = FALSE;
-    GST_WARNING_OBJECT (self, "Invalid %s matrix dimensions.",
-        matrix_type == EXTRINSIC ? "extrinsic" : "intrinsic");
+    GST_WARNING_OBJECT (self, "Invalid %dx%d dimensions for %s matrix.", rows,
+        cols, matrix_type == EXTRINSIC ? "extrinsic 3x4" : "intrinsic 2x3");
   }
   return ret;
 }

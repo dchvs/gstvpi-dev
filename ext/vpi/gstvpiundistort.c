@@ -26,6 +26,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "NV12")
 
+#define NUM_COEFFICIENTS 8
 #define DEFAULT_SENSOR_WIDTH 22.2
 #define DEFAULT_FOCAL_LENGTH 7.5
 
@@ -50,7 +51,7 @@ struct _GstVpiUndistort
   gint interpolator;
   gint distortion_model;
   gint fisheye_mapping;
-  gdouble coefficients[8];
+  gdouble coefficients[NUM_COEFFICIENTS];
 };
 
 /* prototypes */
@@ -93,6 +94,18 @@ enum
 {
   FISHEYE,
   POLYNOMIAL
+};
+
+enum
+{
+  K1,
+  K2,
+  K3,
+  K4,
+  K5,
+  K6,
+  P1,
+  P2
 };
 
 GType
@@ -302,7 +315,7 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
 {
   VPICameraExtrinsic extrinsic = DEFAULT_PROP_EXTRINSIC_MATRIX;
   VPICameraIntrinsic intrinsic = DEFAULT_PROP_INTRINSIC_MATRIX;
-  gdouble coefficients[8] = { 0 };
+  gdouble coefficients[NUM_COEFFICIENTS] = { 0 };
 
   self->warp = NULL;
   self->set_intrinsic_matrix = FALSE;
@@ -357,17 +370,17 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (self->distortion_model == FISHEYE) {
     VPIFisheyeLensDistortionModel fisheye = { self->fisheye_mapping,
-      self->coefficients[0], self->coefficients[1], self->coefficients[2],
-      self->coefficients[3]
+      self->coefficients[K1], self->coefficients[K2], self->coefficients[K3],
+      self->coefficients[K4]
     };
     status = vpiWarpMapGenerateFromFisheyeLensDistortionModel (self->intrinsic,
         self->extrinsic, self->intrinsic, &fisheye, &map);
 
   } else {
-    VPIPolynomialLensDistortionModel polynomial = { self->coefficients[0],
-      self->coefficients[1], self->coefficients[2], self->coefficients[3],
-      self->coefficients[4], self->coefficients[5], self->coefficients[6],
-      self->coefficients[7]
+    VPIPolynomialLensDistortionModel polynomial = { self->coefficients[K1],
+      self->coefficients[K2], self->coefficients[K3], self->coefficients[K4],
+      self->coefficients[K5], self->coefficients[K6], self->coefficients[P1],
+      self->coefficients[P2]
     };
     status =
         vpiWarpMapGenerateFromPolynomialLensDistortionModel (self->intrinsic,

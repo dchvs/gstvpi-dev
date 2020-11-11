@@ -444,6 +444,8 @@ gst_array_to_c_array (const GValue * gst_array, guint * rows, guint * cols)
   guint j = 0;
 
   g_return_val_if_fail (gst_array, NULL);
+  g_return_val_if_fail (rows, NULL);
+  g_return_val_if_fail (cols, NULL);
 
   *rows = gst_value_array_get_size (gst_array);
   *cols = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));

@@ -435,29 +435,29 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
 }
 
 static float *
-gst_array_to_matrix (const GValue * array, guint * rows, guint * cols)
+gst_array_to_c_array (const GValue * gst_array, guint * rows, guint * cols)
 {
   const GValue *row = NULL;
-  float *matrix = NULL;
+  float *c_array = NULL;
   float value = 0;
   guint i = 0;
   guint j = 0;
 
-  g_return_val_if_fail (array, NULL);
+  g_return_val_if_fail (gst_array, NULL);
 
-  *rows = gst_value_array_get_size (array);
-  *cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
+  *rows = gst_value_array_get_size (gst_array);
+  *cols = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));
 
-  matrix = malloc (*rows * *cols * sizeof (*matrix));
+  c_array = malloc (*rows * *cols * sizeof (*c_array));
 
   for (i = 0; i < *rows; i++) {
-    row = gst_value_array_get_value (array, i);
+    row = gst_value_array_get_value (gst_array, i);
     for (j = 0; j < *cols; j++) {
       value = g_value_get_double (gst_value_array_get_value (row, j));
-      matrix[i * *cols + j] = value;
+      c_array[i * *cols + j] = value;
     }
   }
-  return matrix;
+  return c_array;
 }
 
 static gboolean
@@ -472,7 +472,7 @@ gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
   g_return_val_if_fail (self, FALSE);
   g_return_val_if_fail (array, FALSE);
 
-  matrix = gst_array_to_matrix (array, &rows, &cols);
+  matrix = gst_array_to_c_array (array, &rows, &cols);
 
   g_return_val_if_fail (matrix, FALSE);
 
@@ -494,7 +494,7 @@ gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
 }
 
 static void
-matrix_to_gst_array (GValue * array, const float *matrix, guint rows,
+c_array_to_gst_array (GValue * gst_array, const float *c_array, guint rows,
     guint cols)
 {
   GValue row = G_VALUE_INIT;
@@ -502,20 +502,20 @@ matrix_to_gst_array (GValue * array, const float *matrix, guint rows,
   guint i = 0;
   guint j = 0;
 
-  g_return_if_fail (array);
-  g_return_if_fail (matrix);
+  g_return_if_fail (gst_array);
+  g_return_if_fail (c_array);
 
   for (i = 0; i < rows; i++) {
     g_value_init (&row, GST_TYPE_ARRAY);
 
     for (j = 0; j < cols; j++) {
       g_value_init (&value, G_TYPE_DOUBLE);
-      g_value_set_double (&value, matrix[i * cols + j]);
+      g_value_set_double (&value, c_array[i * cols + j]);
       gst_value_array_append_value (&row, &value);
       g_value_unset (&value);
     }
 
-    gst_value_array_append_value (array, &row);
+    gst_value_array_append_value (gst_array, &row);
     g_value_unset (&row);
   }
 }
@@ -536,7 +536,7 @@ gst_vpi_undistort_get_calibration_matrix (GstVpiUndistort * self,
     matrix = malloc (rows * cols * sizeof (*matrix));
     memcpy (matrix, &self->intrinsic, sizeof (self->intrinsic));
   }
-  matrix_to_gst_array (array, matrix, rows, cols);
+  c_array_to_gst_array (array, matrix, rows, cols);
 
   free (matrix);
 }

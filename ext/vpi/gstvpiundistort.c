@@ -494,37 +494,23 @@ gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
 }
 
 static void
-gst_vpi_undistort_convert_calib_matrix_to_gst_array (GstVpiUndistort * self,
-    GValue * array, guint matrix_type)
+matrix_to_gst_array (GValue * array, const float *matrix, guint rows,
+    guint cols)
 {
   GValue row = G_VALUE_INIT;
   GValue value = G_VALUE_INIT;
-  guint rows = 0;
-  guint cols = 0;
   guint i = 0;
   guint j = 0;
 
-  g_return_if_fail (self);
   g_return_if_fail (array);
-
-  if (EXTRINSIC == matrix_type) {
-    rows = 3;
-    cols = 4;
-  } else {
-    rows = 2;
-    cols = 3;
-  }
+  g_return_if_fail (matrix);
 
   for (i = 0; i < rows; i++) {
     g_value_init (&row, GST_TYPE_ARRAY);
 
     for (j = 0; j < cols; j++) {
       g_value_init (&value, G_TYPE_DOUBLE);
-      if (EXTRINSIC == matrix_type) {
-        g_value_set_double (&value, self->extrinsic[i][j]);
-      } else {
-        g_value_set_double (&value, self->intrinsic[i][j]);
-      }
+      g_value_set_double (&value, matrix[i * cols + j]);
       gst_value_array_append_value (&row, &value);
       g_value_unset (&value);
     }
@@ -532,6 +518,27 @@ gst_vpi_undistort_convert_calib_matrix_to_gst_array (GstVpiUndistort * self,
     gst_value_array_append_value (array, &row);
     g_value_unset (&row);
   }
+}
+
+static void
+gst_vpi_undistort_get_calibration_matrix (GstVpiUndistort * self,
+    GValue * array, guint matrix_type, guint rows, guint cols)
+{
+  float *matrix = NULL;
+
+  g_return_if_fail (self);
+  g_return_if_fail (array);
+
+  if (EXTRINSIC == matrix_type) {
+    matrix = malloc (rows * cols * sizeof (*matrix));
+    memcpy (matrix, &self->extrinsic, sizeof (self->extrinsic));
+  } else {
+    matrix = malloc (rows * cols * sizeof (*matrix));
+    memcpy (matrix, &self->intrinsic, sizeof (self->intrinsic));
+  }
+  matrix_to_gst_array (array, matrix, rows, cols);
+
+  free (matrix);
 }
 
 void
@@ -591,12 +598,10 @@ gst_vpi_undistort_get_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_EXTRINSIC_MATRIX:
-      gst_vpi_undistort_convert_calib_matrix_to_gst_array (self, value,
-          EXTRINSIC);
+      gst_vpi_undistort_get_calibration_matrix (self, value, EXTRINSIC, 3, 4);
       break;
     case PROP_INTRINSIC_MATRIX:
-      gst_vpi_undistort_convert_calib_matrix_to_gst_array (self, value,
-          INTRINSIC);
+      gst_vpi_undistort_get_calibration_matrix (self, value, INTRINSIC, 2, 3);
       break;
     case PROP_INTERPOLATOR:
       g_value_set_enum (value, self->interpolator);

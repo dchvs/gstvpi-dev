@@ -202,7 +202,7 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
           "3x4 matrix resulting of concatenation of 3x3 rotation matrix with "
           "3x1 vector containing the position of the origin world coordinate "
           "system expressed in coordinates of camera-centered system.\n"
-          "Example: <<1.0,0.0,0.0,0.0>,<0.0,1.0,0.0,0.0>,<0.0,0.0,1.0,0.0>>",
+          "Usage example: <<1.0,0.0,0.0,0.0>,<0.0,1.0,0.0,0.0>,<0.0,0.0,1.0,0.0>>",
           gst_param_spec_array ("e-matrix-rows", "rows", "rows",
               g_param_spec_double ("e-matrix-cols", "cols", "cols",
                   -G_MAXDOUBLE, G_MAXDOUBLE, 0,
@@ -213,11 +213,11 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
   g_object_class_install_property (gobject_class, PROP_INTRINSIC_MATRIX,
       gst_param_spec_array ("intrinsic",
           "Intrinsic calibration matrix",
-          "2x3 matrix with the first row containing the focal length in pixels "
-          "in x, the skew and the principal point in x and in the second row 0,"
-          " the focal length in pixels in y and principal point in y. If not "
-          "provided a default one will be created.\n"
-          "Example: <<fx,s,cx>,<0.0,fy,cy>>",
+          "2x3 matrix with the parameters: [[fx,s,cx],[0,fy,cy]] where:\n"
+          "fx, fy: focal length in pixels in x and y direction.\ns: skew\n"
+          "cx, cy: the principal point in x and y direction.\nIf not provided,"
+          " a default calibration matrix will be created.\n"
+          "Usage example: <<fx,s,cx>,<0.0,fy,cy>>",
           gst_param_spec_array ("i-matrix-rows", "rows", "rows",
               g_param_spec_double ("i-matrix-cols", "cols", "cols",
                   0, G_MAXDOUBLE, 0,

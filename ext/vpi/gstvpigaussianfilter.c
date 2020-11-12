@@ -179,6 +179,7 @@ gst_vpi_gaussian_filter_adjust_size (GstVpiGaussianFilter * self, gint size,
     GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
         "the same direction. Using default value %d for size.", ret);
   } else if (0 == size) {
+    /* Using VPI Gaussian Filter formula: size = max{3, 2*ceil(3*sigma)-1} */
     ret = 2 * ceil (3 * sigma) - 1;
     ret = (3 < ret) ? ret : 3;
     GST_WARNING_OBJECT (self,
@@ -204,6 +205,7 @@ gst_vpi_gaussian_filter_adjust_sigma (GstVpiGaussianFilter * self, gint size,
     GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
         "the same direction. Using default value %f for sigma.", ret);
   } else if (0 == sigma) {
+    /* Using OpenCV getGaussianKernel formula */
     ret = 0.3 * ((size - 1) * 0.5 - 1) + 0.8;
     GST_WARNING_OBJECT (self,
         "Property sigma is 0. Using size to calculate new value: %f.", ret);

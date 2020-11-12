@@ -16,6 +16,8 @@
 
 #include "gstvpigaussianfilter.h"
 
+#include <math.h>
+
 #include <gst/gst.h>
 
 #include <vpi/algo/GaussianFilter.h>
@@ -45,6 +47,8 @@ struct _GstVpiGaussianFilter
 };
 
 /* prototypes */
+static gboolean gst_vpi_gaussian_filter_start (GstVpiFilter * filter,
+    GstVideoInfo * in_info, GstVideoInfo * out_info);
 static GstFlowReturn gst_vpi_gaussian_filter_transform_image (GstVpiFilter *
     filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
 static void gst_vpi_gaussian_filter_set_property (GObject * object,
@@ -109,6 +113,7 @@ gst_vpi_gaussian_filter_class_init (GstVpiGaussianFilterClass * klass)
       "VPI Gaussian filter element for grayscale images.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
+  vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_gaussian_filter_start);
   vpi_filter_class->transform_image =
       GST_DEBUG_FUNCPTR (gst_vpi_gaussian_filter_transform_image);
   gobject_class->set_property = gst_vpi_gaussian_filter_set_property;
@@ -162,6 +167,81 @@ gst_vpi_gaussian_filter_init (GstVpiGaussianFilter * self)
   self->sigma_y = DEFAULT_PROP_SIGMA;
 }
 
+static gint
+gst_vpi_gaussian_filter_adjust_size (GstVpiGaussianFilter * self, gint size,
+    gdouble sigma)
+{
+  gint ret = DEFAULT_PROP_SIZE;
+
+  g_return_val_if_fail (self, ret);
+
+  if (0 == size && 0 == sigma) {
+    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
+        "the same direction. Using default value %d for size.", ret);
+  } else if (0 == size) {
+    ret = 2 * ceil (3 * sigma) - 1;
+    ret = (3 < ret) ? ret : 3;
+    GST_WARNING_OBJECT (self,
+        "Property size is 0. Using sigma to calculate new value: %d.", ret);
+  } else if (0 == size % 2) {
+    GST_WARNING_OBJECT (self,
+        "Property size must be odd. Using default value %d.", ret);
+  } else {
+    ret = size;
+  }
+  return ret;
+}
+
+static gdouble
+gst_vpi_gaussian_filter_adjust_sigma (GstVpiGaussianFilter * self, gint size,
+    gdouble sigma)
+{
+  gdouble ret = DEFAULT_PROP_SIGMA;
+
+  g_return_val_if_fail (self, ret);
+
+  if (0 == size && 0 == sigma) {
+    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
+        "the same direction. Using default value %f for sigma.", ret);
+  } else if (0 == sigma) {
+    ret = 0.3 * ((size - 1) * 0.5 - 1) + 0.8;
+    GST_WARNING_OBJECT (self,
+        "Property sigma is 0. Using size to calculate new value: %f.", ret);
+  } else {
+    ret = sigma;
+  }
+  return ret;
+}
+
+static gboolean
+gst_vpi_gaussian_filter_start (GstVpiFilter * filter, GstVideoInfo * in_info,
+    GstVideoInfo * out_info)
+{
+  GstVpiGaussianFilter *self = NULL;
+  gboolean ret = TRUE;
+
+  g_return_val_if_fail (filter, FALSE);
+  g_return_val_if_fail (in_info, FALSE);
+  g_return_val_if_fail (out_info, FALSE);
+
+  self = GST_VPI_GAUSSIAN_FILTER (filter);
+
+  GST_DEBUG_OBJECT (self, "start");
+
+  /* Adjust size and sigma in case they are invalid */
+  self->size_x = gst_vpi_gaussian_filter_adjust_size (self, self->size_x,
+      self->sigma_x);
+  self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
+      self->sigma_x);
+  self->size_y = gst_vpi_gaussian_filter_adjust_size (self, self->size_y,
+      self->sigma_y);
+  self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
+      self->sigma_y);
+
+  return ret;
+}
+
+
 static GstFlowReturn
 gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
     VPIStream stream, VPIImage in_image, VPIImage out_image)
@@ -202,84 +282,27 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   return ret;
 }
 
-static gint
-gst_vpi_gaussian_filter_adjust_size (GstVpiGaussianFilter * self, gint size,
-    gdouble sigma)
-{
-  gint ret = DEFAULT_PROP_SIZE;
-
-  g_return_val_if_fail (self, ret);
-
-  if (0 == size && 0 == sigma) {
-    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
-        "the same direction. Using default value for size.");
-  } else if (0 != size && 0 == size % 2) {
-    GST_WARNING_OBJECT (self,
-        "Property size must be odd. Using default value.");
-  } else {
-    ret = size;
-  }
-  return ret;
-}
-
-static gdouble
-gst_vpi_gaussian_filter_adjust_sigma (GstVpiGaussianFilter * self, gint size,
-    gdouble sigma)
-{
-  gdouble ret = DEFAULT_PROP_SIGMA;
-
-  g_return_val_if_fail (self, ret);
-
-  if (0 == size && 0 == sigma) {
-    GST_WARNING_OBJECT (self, "Properties size and sigma cannot be both 0 in "
-        "the same direction. Using default value for sigma.");
-  } else if (0 == sigma) {
-    ret = 0.3 * ((size - 1) * 0.5 - 1) + 0.8;
-  } else {
-    ret = sigma;
-  }
-  return ret;
-}
-
 void
 gst_vpi_gaussian_filter_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
   GstVpiGaussianFilter *self = GST_VPI_GAUSSIAN_FILTER (object);
-  gint size = 0;
-  gdouble sigma = 0;
 
   GST_DEBUG_OBJECT (self, "set_property");
 
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_SIZE_X:
-      size = g_value_get_int (value);
-
-      self->size_x = gst_vpi_gaussian_filter_adjust_size (self, size,
-          self->sigma_x);
-      self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
-          self->sigma_x);
+      self->size_x = g_value_get_int (value);
       break;
     case PROP_SIZE_Y:
-      size = g_value_get_int (value);
-
-      self->size_y = gst_vpi_gaussian_filter_adjust_size (self, size,
-          self->sigma_y);
-      self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
-          self->sigma_y);
+      self->size_y = g_value_get_int (value);
       break;
     case PROP_SIGMA_X:
-      sigma = g_value_get_double (value);
-
-      self->sigma_x = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_x,
-          sigma);
+      self->sigma_x = g_value_get_double (value);
       break;
     case PROP_SIGMA_Y:
-      sigma = g_value_get_double (value);
-
-      self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
-          sigma);
+      self->sigma_y = g_value_get_double (value);
       break;
     case PROP_BOUNDARY_COND:
       self->boundary_cond = g_value_get_enum (value);

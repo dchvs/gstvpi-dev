@@ -31,10 +31,11 @@ cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
 
 c = meson.get_compiler('c')
 vpi_dep = c.find_library('nvvpi', required:true)
+math_dep = c.find_library('m', required:true)
 
 ## Dependencies
 # Define plugin dependencies
-plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, vpi_dep]
+plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, vpi_dep, math_dep]
 # Examples dependencies
 example_deps = [gst_dep, gst_base_dep]
 # Define test dependencies

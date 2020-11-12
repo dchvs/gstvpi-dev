@@ -26,10 +26,32 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "NV12")
 
+#define NUM_COEFFICIENTS 8
+#define DEFAULT_SENSOR_WIDTH 22.2
+#define DEFAULT_FOCAL_LENGTH 7.5
+
+#define DEFAULT_PROP_COEF_MIN -G_MAXDOUBLE
+#define DEFAULT_PROP_COEF_MAX G_MAXDOUBLE
+
+#define DEFAULT_PROP_EXTRINSIC_MATRIX { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0} }
+#define DEFAULT_PROP_INTRINSIC_MATRIX { 0 }
+#define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_CATMULL_ROM
+#define DEFAULT_PROP_DISTORTION_MODEL FISHEYE
+#define DEFAULT_PROP_FISHEYE_MAPPING VPI_FISHEYE_EQUIDISTANT
+#define DEFAULT_PROP_COEF 0.0
+
+
 struct _GstVpiUndistort
 {
   GstVpiFilter parent;
   VPIPayload warp;
+  VPICameraExtrinsic extrinsic;
+  VPICameraIntrinsic intrinsic;
+  gboolean set_intrinsic_matrix;
+  gint interpolator;
+  gint distortion_model;
+  gint fisheye_mapping;
+  gdouble coefficients[NUM_COEFFICIENTS];
 };
 
 /* prototypes */
@@ -46,8 +68,111 @@ static void gst_vpi_undistort_finalize (GObject * object);
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_EXTRINSIC_MATRIX,
+  PROP_INTRINSIC_MATRIX,
+  PROP_INTERPOLATOR,
+  PROP_DISTORTION_MODEL,
+  PROP_FISHEYE_MAPPING,
+  PROP_K1,
+  PROP_K2,
+  PROP_K3,
+  PROP_K4,
+  PROP_K5,
+  PROP_K6,
+  PROP_P1,
+  PROP_P2
 };
+
+enum
+{
+  EXTRINSIC,
+  INTRINSIC
+};
+
+enum
+{
+  FISHEYE,
+  POLYNOMIAL
+};
+
+enum
+{
+  K1,
+  K2,
+  K3,
+  K4,
+  K5,
+  K6,
+  P1,
+  P2
+};
+
+GType
+vpi_distortion_model_enum_get_type (void)
+{
+  static GType vpi_distortion_model_enum_type = 0;
+  static const GEnumValue values[] = {
+    {FISHEYE, "Fisheye distortion model",
+        "fisheye"},
+    {POLYNOMIAL, "Polynomial (Brown-Conrady) distortion model",
+        "polynomial"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_distortion_model_enum_type) {
+    vpi_distortion_model_enum_type =
+        g_enum_register_static ("VpiDistortionModel", values);
+  }
+
+  return vpi_distortion_model_enum_type;
+}
+
+GType
+vpi_fisheye_mapping_enum_get_type (void)
+{
+  static GType vpi_fisheye_mapping_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_FISHEYE_EQUIDISTANT, "Specifies the equidistant fisheye mapping.",
+        "equidistant"},
+    {VPI_FISHEYE_EQUISOLID, "Specifies the equisolid fisheye mapping.",
+        "equisolid"},
+    {VPI_FISHEYE_ORTHOGRAPHIC, "Specifies the ortographic fisheye mapping.",
+        "ortographic"},
+    {VPI_FISHEYE_STEREOGRAPHIC, "Specifies the stereographic fisheye mapping.",
+        "stereographic"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_fisheye_mapping_enum_type) {
+    vpi_fisheye_mapping_enum_type =
+        g_enum_register_static ("VpiFisheyeMapping", values);
+  }
+
+  return vpi_fisheye_mapping_enum_type;
+}
+
+GType
+vpi_interpolator_enum_get_type (void)
+{
+  static GType vpi_interpolator_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_INTERP_NEAREST, "Nearest neighbor interpolation.",
+        "nearest"},
+    {VPI_INTERP_LINEAR, "Fast linear interpolation.",
+        "linear"},
+    {VPI_INTERP_CATMULL_ROM, "Fast Catmull-Rom cubic interpolation.",
+        "catmull"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_interpolator_enum_type) {
+    vpi_interpolator_enum_type =
+        g_enum_register_static ("VpiInterpolator", values);
+  }
+
+  return vpi_interpolator_enum_type;
+}
 
 /* class initialization */
 
@@ -83,12 +208,123 @@ gst_vpi_undistort_class_init (GstVpiUndistortClass * klass)
   gobject_class->set_property = gst_vpi_undistort_set_property;
   gobject_class->get_property = gst_vpi_undistort_get_property;
   gobject_class->finalize = gst_vpi_undistort_finalize;
+
+  g_object_class_install_property (gobject_class, PROP_EXTRINSIC_MATRIX,
+      gst_param_spec_array ("extrinsic",
+          "Extrinsic calibration matrix",
+          "3x4 matrix resulting of concatenation of 3x3 rotation matrix with "
+          "3x1 vector containing the position of the origin world coordinate "
+          "system expressed in coordinates of camera-centered system.\n"
+          "Usage example: <<1.0,0.0,0.0,0.0>,<0.0,1.0,0.0,0.0>,<0.0,0.0,1.0,0.0>>",
+          gst_param_spec_array ("e-matrix-rows", "rows", "rows",
+              g_param_spec_double ("e-matrix-cols", "cols", "cols",
+                  -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                  (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_INTRINSIC_MATRIX,
+      gst_param_spec_array ("intrinsic",
+          "Intrinsic calibration matrix",
+          "2x3 matrix with the parameters: [[fx,s,cx],[0,fy,cy]] where:\n"
+          "fx, fy: focal length in pixels in x and y direction.\ns: skew\n"
+          "cx, cy: the principal point in x and y direction.\nIf not provided,"
+          " a default calibration matrix will be created.\n"
+          "Usage example: <<fx,s,cx>,<0.0,fy,cy>>",
+          gst_param_spec_array ("i-matrix-rows", "rows", "rows",
+              g_param_spec_double ("i-matrix-cols", "cols", "cols",
+                  0, G_MAXDOUBLE, 0,
+                  (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_INTERPOLATOR,
+      g_param_spec_enum ("interpolator", "Interpolation method",
+          "Interpolation method to be used.",
+          VPI_INTERPOLATORS_ENUM, DEFAULT_PROP_INTERPOLATOR,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_DISTORTION_MODEL,
+      g_param_spec_enum ("model", "Distortion model",
+          "Type of distortion model to use.",
+          VPI_DISTORTION_MODELS_ENUM, DEFAULT_PROP_DISTORTION_MODEL,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_FISHEYE_MAPPING,
+      g_param_spec_enum ("mapping",
+          "Fisheye mapping. Only if model is fisheye.",
+          "Type of fisheye lens mapping types.", VPI_FISHEYE_MAPPINGS_ENUM,
+          DEFAULT_PROP_FISHEYE_MAPPING,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_K1,
+      g_param_spec_double ("k1", "Distortion coefficient",
+          "Distortion coefficient 1 of the chosen distortion model (fisheye "
+          "or polynomial).",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_K2,
+      g_param_spec_double ("k2", "Distortion coefficient",
+          "Distortion coefficient 2 of the chosen distortion model (fisheye "
+          "or polynomial).",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_K3,
+      g_param_spec_double ("k3", "Distortion coefficient",
+          "Distortion coefficient 3 of the chosen distortion model (fisheye "
+          "or polynomial).",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_K4,
+      g_param_spec_double ("k4", "Distortion coefficient",
+          "Distortion coefficient 4 of the chosen distortion model (fisheye "
+          "or polynomial).",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_K5,
+      g_param_spec_double ("k5", "Distortion coefficient",
+          "Distortion coefficient 5. Only for polynomial model.",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_K6,
+      g_param_spec_double ("k6", "Distortion coefficient",
+          "Distortion coefficient 6. Only for polynomial model.",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_P1,
+      g_param_spec_double ("p1", "Tangential distortion coefficient",
+          "Tangential distortion coefficient 1. Only for polynomial model.",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_P2,
+      g_param_spec_double ("p2", "Tangential distortion coefficient",
+          "Tangential distortion coefficient 2. Only for polynomial model.",
+          DEFAULT_PROP_COEF_MIN, DEFAULT_PROP_COEF_MAX, DEFAULT_PROP_COEF,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_undistort_init (GstVpiUndistort * self)
 {
+  VPICameraExtrinsic extrinsic = DEFAULT_PROP_EXTRINSIC_MATRIX;
+  VPICameraIntrinsic intrinsic = DEFAULT_PROP_INTRINSIC_MATRIX;
+  gdouble coefficients[NUM_COEFFICIENTS] = { 0 };
+
   self->warp = NULL;
+  self->set_intrinsic_matrix = FALSE;
+  self->interpolator = DEFAULT_PROP_INTERPOLATOR;
+  self->distortion_model = DEFAULT_PROP_DISTORTION_MODEL;
+  self->fisheye_mapping = DEFAULT_PROP_FISHEYE_MAPPING;
+  memcpy (&self->extrinsic, &extrinsic, sizeof (extrinsic));
+  memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
+  memcpy (&self->coefficients, &coefficients, sizeof (coefficients));
 }
 
 static gboolean
@@ -98,19 +334,9 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   GstVpiUndistort *self = NULL;
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
-  VPIFisheyeLensDistortionModel fisheye = { 0 };
   VPIWarpMap map = { 0 };
   guint width = 0;
   guint height = 0;
-  /* TODO: Expose this parameters as element properties */
-  gdouble sensor_width = 22.2;
-  gdouble focal_length = 7.5;
-  gdouble f = 0;
-  VPICameraIntrinsic intrinsic = { 0 };
-  VPICameraExtrinsic extrinsic = { {1, 0, 0, 0},
-  {0, 1, 0, 0},
-  {0, 0, 1, 0}
-  };
 
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);
@@ -123,11 +349,6 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
 
-  f = focal_length * width / sensor_width;
-  intrinsic[0][0] = intrinsic[1][1] = f;
-  intrinsic[0][2] = width / 2.0;
-  intrinsic[1][2] = height / 2.0;
-
   map.grid.numHorizRegions = 1;
   map.grid.numVertRegions = 1;
   map.grid.regionWidth[0] = width;
@@ -136,14 +357,35 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   map.grid.vertInterval[0] = 1;
   vpiWarpMapAllocData (&map);
 
-  fisheye.mapping = VPI_FISHEYE_EQUIDISTANT;
-  fisheye.k1 = -0.126;
-  fisheye.k2 = 0.004;
-  fisheye.k3 = 0;
-  fisheye.k4 = 0;
+  /* Create default intrinsic matrix if not provided by user */
+  if (!self->set_intrinsic_matrix) {
+    gdouble f = DEFAULT_FOCAL_LENGTH * width / DEFAULT_SENSOR_WIDTH;
+    VPICameraIntrinsic intrinsic = { {f, 0, width / 2.0}
+    , {0, f, height / 2.0}
+    };
+    GST_WARNING_OBJECT (self,
+        "Calibration matrix not set. Using default matrix.");
+    memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
+  }
 
-  status = vpiWarpMapGenerateFromFisheyeLensDistortionModel (intrinsic,
-      extrinsic, intrinsic, &fisheye, &map);
+  if (self->distortion_model == FISHEYE) {
+    VPIFisheyeLensDistortionModel fisheye = { self->fisheye_mapping,
+      self->coefficients[K1], self->coefficients[K2], self->coefficients[K3],
+      self->coefficients[K4]
+    };
+    status = vpiWarpMapGenerateFromFisheyeLensDistortionModel (self->intrinsic,
+        self->extrinsic, self->intrinsic, &fisheye, &map);
+
+  } else {
+    VPIPolynomialLensDistortionModel polynomial = { self->coefficients[K1],
+      self->coefficients[K2], self->coefficients[K3], self->coefficients[K4],
+      self->coefficients[K5], self->coefficients[K6], self->coefficients[P1],
+      self->coefficients[P2]
+    };
+    status =
+        vpiWarpMapGenerateFromPolynomialLensDistortionModel (self->intrinsic,
+        self->extrinsic, self->intrinsic, &polynomial, &map);
+  }
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -183,7 +425,7 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   GST_LOG_OBJECT (self, "Transform image");
 
   status = vpiSubmitRemap (stream, self->warp, in_image, out_image,
-      VPI_INTERP_LINEAR, VPI_BOUNDARY_COND_ZERO);
+      self->interpolator, VPI_BOUNDARY_COND_ZERO);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -192,34 +434,205 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   return ret;
 }
 
+static float *
+gst_array_to_c_array (const GValue * gst_array, guint * rows, guint * cols)
+{
+  const GValue *row = NULL;
+  float *c_array = NULL;
+  float value = 0;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_val_if_fail (gst_array, NULL);
+  g_return_val_if_fail (rows, NULL);
+  g_return_val_if_fail (cols, NULL);
+
+  *rows = gst_value_array_get_size (gst_array);
+  *cols = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));
+
+  c_array = malloc (*rows * *cols * sizeof (*c_array));
+
+  for (i = 0; i < *rows; i++) {
+    row = gst_value_array_get_value (gst_array, i);
+    for (j = 0; j < *cols; j++) {
+      value = g_value_get_double (gst_value_array_get_value (row, j));
+      c_array[i * *cols + j] = value;
+    }
+  }
+  return c_array;
+}
+
+static gboolean
+gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
+    const GValue * array, guint matrix_type)
+{
+  float *matrix = NULL;
+  guint rows = 0;
+  guint cols = 0;
+  gboolean ret = TRUE;
+
+  g_return_val_if_fail (self, FALSE);
+  g_return_val_if_fail (array, FALSE);
+
+  matrix = gst_array_to_c_array (array, &rows, &cols);
+
+  g_return_val_if_fail (matrix, FALSE);
+
+  if (EXTRINSIC == matrix_type && 3 == rows && 4 == cols) {
+    memcpy (&self->extrinsic, matrix, rows * cols * sizeof (*matrix));
+
+  } else if (INTRINSIC == matrix_type && 2 == rows && 3 == cols) {
+    memcpy (&self->intrinsic, matrix, rows * cols * sizeof (*matrix));
+
+  } else {
+    ret = FALSE;
+    GST_WARNING_OBJECT (self, "Invalid %dx%d dimensions for %s matrix.", rows,
+        cols, matrix_type == EXTRINSIC ? "extrinsic 3x4" : "intrinsic 2x3");
+  }
+
+  free (matrix);
+
+  return ret;
+}
+
+static void
+c_array_to_gst_array (GValue * gst_array, const float *c_array, guint rows,
+    guint cols)
+{
+  GValue row = G_VALUE_INIT;
+  GValue value = G_VALUE_INIT;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_if_fail (gst_array);
+  g_return_if_fail (c_array);
+
+  for (i = 0; i < rows; i++) {
+    g_value_init (&row, GST_TYPE_ARRAY);
+
+    for (j = 0; j < cols; j++) {
+      g_value_init (&value, G_TYPE_DOUBLE);
+      g_value_set_double (&value, c_array[i * cols + j]);
+      gst_value_array_append_value (&row, &value);
+      g_value_unset (&value);
+    }
+
+    gst_value_array_append_value (gst_array, &row);
+    g_value_unset (&row);
+  }
+}
+
+static void
+gst_vpi_undistort_get_calibration_matrix (GstVpiUndistort * self,
+    GValue * array, guint matrix_type, guint rows, guint cols)
+{
+  float *matrix = NULL;
+
+  g_return_if_fail (self);
+  g_return_if_fail (array);
+
+  if (EXTRINSIC == matrix_type) {
+    matrix = malloc (rows * cols * sizeof (*matrix));
+    memcpy (matrix, &self->extrinsic, sizeof (self->extrinsic));
+  } else {
+    matrix = malloc (rows * cols * sizeof (*matrix));
+    memcpy (matrix, &self->intrinsic, sizeof (self->intrinsic));
+  }
+  c_array_to_gst_array (array, matrix, rows, cols);
+
+  free (matrix);
+}
+
 void
 gst_vpi_undistort_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstVpiUndistort *vpi_undistort = GST_VPI_UNDISTORT (object);
+  GstVpiUndistort *self = GST_VPI_UNDISTORT (object);
 
-  GST_DEBUG_OBJECT (vpi_undistort, "set_property");
+  GST_DEBUG_OBJECT (self, "set_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_EXTRINSIC_MATRIX:
+      gst_vpi_undistort_set_calibration_matrix (self, value, EXTRINSIC);
+      break;
+    case PROP_INTRINSIC_MATRIX:
+      self->set_intrinsic_matrix =
+          gst_vpi_undistort_set_calibration_matrix (self, value, INTRINSIC);
+      break;
+    case PROP_INTERPOLATOR:
+      self->interpolator = g_value_get_enum (value);
+      break;
+    case PROP_DISTORTION_MODEL:
+      self->distortion_model = g_value_get_enum (value);
+      break;
+    case PROP_FISHEYE_MAPPING:
+      self->fisheye_mapping = g_value_get_enum (value);
+      break;
+    case PROP_K1:
+    case PROP_K2:
+    case PROP_K3:
+    case PROP_K4:
+    case PROP_K5:
+    case PROP_K6:
+    case PROP_P1:
+    case PROP_P2:
+    {
+      gint idx = property_id - PROP_K1;
+      self->coefficients[idx] = g_value_get_double (value);
+      break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 void
 gst_vpi_undistort_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstVpiUndistort *vpi_undistort = GST_VPI_UNDISTORT (object);
+  GstVpiUndistort *self = GST_VPI_UNDISTORT (object);
 
-  GST_DEBUG_OBJECT (vpi_undistort, "get_property");
+  GST_DEBUG_OBJECT (self, "get_property");
 
+  GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_EXTRINSIC_MATRIX:
+      gst_vpi_undistort_get_calibration_matrix (self, value, EXTRINSIC, 3, 4);
+      break;
+    case PROP_INTRINSIC_MATRIX:
+      gst_vpi_undistort_get_calibration_matrix (self, value, INTRINSIC, 2, 3);
+      break;
+    case PROP_INTERPOLATOR:
+      g_value_set_enum (value, self->interpolator);
+      break;
+    case PROP_DISTORTION_MODEL:
+      g_value_set_enum (value, self->distortion_model);
+      break;
+    case PROP_FISHEYE_MAPPING:
+      g_value_set_enum (value, self->fisheye_mapping);
+      break;
+    case PROP_K1:
+    case PROP_K2:
+    case PROP_K3:
+    case PROP_K4:
+    case PROP_K5:
+    case PROP_K6:
+    case PROP_P1:
+    case PROP_P2:
+    {
+      gint idx = property_id - PROP_K1;
+      self->coefficients[idx] = g_value_get_double (value);
+      g_value_set_double (value, self->coefficients[idx]);
+      break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 static gboolean

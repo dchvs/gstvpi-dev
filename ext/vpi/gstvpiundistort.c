@@ -17,7 +17,6 @@
 #include "gstvpiundistort.h"
 
 #include <gst/gst.h>
-
 #include <vpi/algo/Remap.h>
 #include <vpi/LensDistortionModels.h>
 
@@ -363,9 +362,11 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     VPICameraIntrinsic intrinsic = { {f, 0, width / 2.0}
     , {0, f, height / 2.0}
     };
-    GST_WARNING_OBJECT (self,
-        "Calibration matrix not set. Using default matrix.");
     memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
+    GST_WARNING_OBJECT (self,
+        "Calibration matrix not set. Using default matrix <<%f, %f, %f>, "
+        "<%f, %f, %f>>.", intrinsic[0][0], intrinsic[0][1], intrinsic[0][2],
+        intrinsic[1][0], intrinsic[1][1], intrinsic[1][2]);
   }
 
   if (self->distortion_model == FISHEYE) {

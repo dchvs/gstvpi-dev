@@ -16,6 +16,7 @@
 
 #include "gstvpiundistort.h"
 
+#include <glib/gprintf.h>
 #include <gst/gst.h>
 #include <vpi/algo/Remap.h>
 #include <vpi/LensDistortionModels.h>
@@ -24,6 +25,11 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_undistort_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_undistort_debug_category
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "NV12")
+
+#define ROWS_INTRINSIC 2
+#define COLS_INTRINSIC 3
+#define ROWS_EXTRINSIC 3
+#define COLS_EXTRINSIC 4
 
 #define NUM_COEFFICIENTS 8
 #define DEFAULT_SENSOR_WIDTH 22.2
@@ -326,6 +332,68 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
   memcpy (&self->coefficients, &coefficients, sizeof (coefficients));
 }
 
+static gchar *
+c_array_to_string (float *c_array, guint rows, guint cols)
+{
+  gchar *string = NULL;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_val_if_fail (c_array, NULL);
+
+  string = malloc (256 * sizeof (string));
+  g_sprintf (string, "%s< ", string);
+  for (i = 0; i < rows; i++) {
+    g_sprintf (string, "%s < ", string);
+    for (j = 0; j < cols; j++) {
+      g_sprintf (string, "%s%.3f ", string, c_array[i * cols + j]);
+    }
+    g_sprintf (string, "%s> ", string);
+  }
+  g_sprintf (string, "%s>", string);
+  return string;
+}
+
+static void
+gst_vpi_undistort_summarize_properties (GstVpiUndistort * self)
+{
+  gchar summary[512] = "\nProperties summary:\n";
+  gchar *intrinsic_str = NULL;
+  gchar *extrinsic_str = NULL;
+  float *intrinsic = NULL;
+  float *extrinsic = NULL;
+
+  g_return_if_fail (self);
+
+  intrinsic = malloc (sizeof (self->intrinsic));
+  memcpy (intrinsic, &self->intrinsic, sizeof (self->intrinsic));
+  intrinsic_str = c_array_to_string (intrinsic, ROWS_INTRINSIC, COLS_INTRINSIC);
+  extrinsic = malloc (sizeof (self->extrinsic));
+  memcpy (extrinsic, &self->extrinsic, sizeof (self->extrinsic));
+  extrinsic_str = c_array_to_string (extrinsic, ROWS_EXTRINSIC, COLS_EXTRINSIC);
+
+  g_sprintf (summary,
+      "%sextrinsic=%s\nintrinsic=%s\ninterpolator=%d\nmodel=%d\n"
+      "k1=%f\nk2=%f\nk3=%f\nk4=%f\n", summary, extrinsic_str, intrinsic_str,
+      self->interpolator, self->distortion_model, self->coefficients[K1],
+      self->coefficients[K2], self->coefficients[K3], self->coefficients[K4]);
+
+  if (self->distortion_model == POLYNOMIAL) {
+    g_sprintf (summary, "%sk5=%f\nk6=%f\np1=%f\np2=%f\n", summary,
+        self->coefficients[K5], self->coefficients[K6], self->coefficients[P1],
+        self->coefficients[P2]);
+  } else {
+    g_sprintf (summary, "%smapping=%d", summary, self->fisheye_mapping);
+  }
+
+  GST_INFO_OBJECT (self, "%s", summary);
+
+  free (intrinsic);
+  free (intrinsic_str);
+  free (extrinsic);
+  free (extrinsic_str);
+}
+
 static gboolean
 gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     GstVideoInfo * out_info)
@@ -359,14 +427,17 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   /* Create default intrinsic matrix if not provided by user */
   if (!self->set_intrinsic_matrix) {
     gdouble f = DEFAULT_FOCAL_LENGTH * width / DEFAULT_SENSOR_WIDTH;
-    VPICameraIntrinsic intrinsic = { {f, 0, width / 2.0}
-    , {0, f, height / 2.0}
+    float intrinsic[ROWS_INTRINSIC * COLS_INTRINSIC] = { f, 0, width / 2.0, 0,
+      f, height / 2.0
     };
+    gchar *intrinsic_str = NULL;
+
     memcpy (&self->intrinsic, &intrinsic, sizeof (intrinsic));
+    intrinsic_str = c_array_to_string (intrinsic, ROWS_INTRINSIC,
+        COLS_INTRINSIC);
     GST_WARNING_OBJECT (self,
-        "Calibration matrix not set. Using default matrix <<%f, %f, %f>, "
-        "<%f, %f, %f>>.", intrinsic[0][0], intrinsic[0][1], intrinsic[0][2],
-        intrinsic[1][0], intrinsic[1][1], intrinsic[1][2]);
+        "Calibration matrix not set. Using default matrix %s.", intrinsic_str);
+    free (intrinsic_str);
   }
 
   if (self->distortion_model == FISHEYE) {
@@ -405,6 +476,7 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
 out:
   vpiWarpMapFreeData (&map);
+  gst_vpi_undistort_summarize_properties (self);
   return ret;
 }
 
@@ -479,10 +551,12 @@ gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
 
   g_return_val_if_fail (matrix, FALSE);
 
-  if (EXTRINSIC == matrix_type && 3 == rows && 4 == cols) {
+  if (EXTRINSIC == matrix_type && ROWS_EXTRINSIC == rows
+      && COLS_EXTRINSIC == cols) {
     memcpy (&self->extrinsic, matrix, rows * cols * sizeof (*matrix));
 
-  } else if (INTRINSIC == matrix_type && 2 == rows && 3 == cols) {
+  } else if (INTRINSIC == matrix_type && ROWS_INTRINSIC == rows
+      && COLS_INTRINSIC == cols) {
     memcpy (&self->intrinsic, matrix, rows * cols * sizeof (*matrix));
 
   } else {
@@ -601,10 +675,12 @@ gst_vpi_undistort_get_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_EXTRINSIC_MATRIX:
-      gst_vpi_undistort_get_calibration_matrix (self, value, EXTRINSIC, 3, 4);
+      gst_vpi_undistort_get_calibration_matrix (self, value, EXTRINSIC,
+          ROWS_EXTRINSIC, COLS_EXTRINSIC);
       break;
     case PROP_INTRINSIC_MATRIX:
-      gst_vpi_undistort_get_calibration_matrix (self, value, INTRINSIC, 2, 3);
+      gst_vpi_undistort_get_calibration_matrix (self, value, INTRINSIC,
+          ROWS_INTRINSIC, COLS_INTRINSIC);
       break;
     case PROP_INTERPOLATOR:
       g_value_set_enum (value, self->interpolator);

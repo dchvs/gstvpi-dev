@@ -238,6 +238,10 @@ gst_vpi_gaussian_filter_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   self->sigma_y = gst_vpi_gaussian_filter_adjust_sigma (self, self->size_y,
       self->sigma_y);
 
+  GST_INFO_OBJECT (self, "\nProperties summary:\nsize-x=%d\nsigma-x=%f\nsize-y="
+      "%d\nsigma-y=%f\nboundary=%d", self->size_x, self->sigma_x, self->size_y,
+      self->sigma_y, self->boundary_cond);
+
   return ret;
 }
 

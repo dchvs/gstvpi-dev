@@ -16,11 +16,10 @@
 
 #include "gstvpigaussianfilter.h"
 
-#include <math.h>
-
 #include <gst/gst.h>
-
 #include <vpi/algo/GaussianFilter.h>
+
+#include <math.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_gaussian_filter_debug_category

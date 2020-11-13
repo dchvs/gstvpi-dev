@@ -387,7 +387,7 @@ c_array_to_string (float *c_array, guint rows, guint cols)
 static void
 gst_vpi_undistort_summarize_properties (GstVpiUndistort * self)
 {
-  gchar summary[512] = "\nProperties summary:\n";
+  gchar *summary = NULL;
   gchar *intrinsic_str = NULL;
   gchar *extrinsic_str = NULL;
   float *intrinsic = NULL;
@@ -402,18 +402,18 @@ gst_vpi_undistort_summarize_properties (GstVpiUndistort * self)
   memcpy (extrinsic, &self->extrinsic, sizeof (self->extrinsic));
   extrinsic_str = c_array_to_string (extrinsic, ROWS_EXTRINSIC, COLS_EXTRINSIC);
 
-  g_sprintf (summary,
-      "%sextrinsic=%s\nintrinsic=%s\ninterpolator=%d\nmodel=%d\n"
-      "k1=%f\nk2=%f\nk3=%f\nk4=%f\n", summary, extrinsic_str, intrinsic_str,
-      self->interpolator, self->distortion_model, self->coefficients[K1],
-      self->coefficients[K2], self->coefficients[K3], self->coefficients[K4]);
+  append_string_format (&summary, "\nProperties summary:\nextrinsic=%s\n"
+      "intrinsic=%s\ninterpolator=%d\nmodel=%d\nk1=%f\nk2=%f\nk3=%f\nk4=%f\n",
+      extrinsic_str, intrinsic_str, self->interpolator, self->distortion_model,
+      self->coefficients[K1], self->coefficients[K2], self->coefficients[K3],
+      self->coefficients[K4]);
 
   if (self->distortion_model == POLYNOMIAL) {
-    g_sprintf (summary, "%sk5=%f\nk6=%f\np1=%f\np2=%f\n", summary,
+    append_string_format (&summary, "k5=%f\nk6=%f\np1=%f\np2=%f\n",
         self->coefficients[K5], self->coefficients[K6], self->coefficients[P1],
         self->coefficients[P2]);
   } else {
-    g_sprintf (summary, "%smapping=%d", summary, self->fisheye_mapping);
+    append_string_format (&summary, "mapping=%d", self->fisheye_mapping);
   }
 
   GST_INFO_OBJECT (self, "%s", summary);
@@ -422,6 +422,7 @@ gst_vpi_undistort_summarize_properties (GstVpiUndistort * self)
   g_free (intrinsic_str);
   g_free (extrinsic);
   g_free (extrinsic_str);
+  g_free (summary);
 }
 
 static gboolean

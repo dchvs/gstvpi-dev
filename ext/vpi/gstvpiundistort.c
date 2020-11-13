@@ -332,6 +332,36 @@ gst_vpi_undistort_init (GstVpiUndistort * self)
   memcpy (&self->coefficients, &coefficients, sizeof (coefficients));
 }
 
+static void
+append_string_format (gchar ** dest, const char *format, ...)
+{
+
+  va_list args;
+  gint length = 0;
+  gchar *new_string = NULL;
+
+  g_return_if_fail (dest);
+  g_return_if_fail (format);
+
+  va_start (args, format);
+
+  length = g_vsnprintf (NULL, 0, format, args) + 1;
+  new_string = g_malloc (length);
+  g_vsprintf (new_string, format, args);
+
+  if (!*dest) {
+    *dest = g_malloc (length);
+    g_strlcpy (*dest, new_string, length);
+  } else {
+    length = length + strlen (*dest);
+    *dest = g_realloc (*dest, length);
+    g_strlcat (*dest, new_string, length);
+  }
+
+  va_end (args);
+  g_free (new_string);
+}
+
 static gchar *
 c_array_to_string (float *c_array, guint rows, guint cols)
 {
@@ -341,16 +371,16 @@ c_array_to_string (float *c_array, guint rows, guint cols)
 
   g_return_val_if_fail (c_array, NULL);
 
-  string = g_malloc (256 * sizeof (string));
-  g_sprintf (string, "< ");
+  append_string_format (&string, "< ");
   for (i = 0; i < rows; i++) {
-    g_sprintf (string, "%s < ", string);
+    append_string_format (&string, "< ");
     for (j = 0; j < cols; j++) {
-      g_sprintf (string, "%s%.3f ", string, c_array[i * cols + j]);
+      append_string_format (&string, "%.3f ", c_array[i * cols + j]);
     }
-    g_sprintf (string, "%s> ", string);
+    append_string_format (&string, "> ");
   }
-  g_sprintf (string, "%s>", string);
+  append_string_format (&string, ">");
+
   return string;
 }
 

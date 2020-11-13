@@ -341,8 +341,8 @@ c_array_to_string (float *c_array, guint rows, guint cols)
 
   g_return_val_if_fail (c_array, NULL);
 
-  string = malloc (256 * sizeof (string));
-  g_sprintf (string, "%s< ", string);
+  string = g_malloc (256 * sizeof (string));
+  g_sprintf (string, "< ");
   for (i = 0; i < rows; i++) {
     g_sprintf (string, "%s < ", string);
     for (j = 0; j < cols; j++) {
@@ -365,10 +365,10 @@ gst_vpi_undistort_summarize_properties (GstVpiUndistort * self)
 
   g_return_if_fail (self);
 
-  intrinsic = malloc (sizeof (self->intrinsic));
+  intrinsic = g_malloc (sizeof (self->intrinsic));
   memcpy (intrinsic, &self->intrinsic, sizeof (self->intrinsic));
   intrinsic_str = c_array_to_string (intrinsic, ROWS_INTRINSIC, COLS_INTRINSIC);
-  extrinsic = malloc (sizeof (self->extrinsic));
+  extrinsic = g_malloc (sizeof (self->extrinsic));
   memcpy (extrinsic, &self->extrinsic, sizeof (self->extrinsic));
   extrinsic_str = c_array_to_string (extrinsic, ROWS_EXTRINSIC, COLS_EXTRINSIC);
 
@@ -388,10 +388,10 @@ gst_vpi_undistort_summarize_properties (GstVpiUndistort * self)
 
   GST_INFO_OBJECT (self, "%s", summary);
 
-  free (intrinsic);
-  free (intrinsic_str);
-  free (extrinsic);
-  free (extrinsic_str);
+  g_free (intrinsic);
+  g_free (intrinsic_str);
+  g_free (extrinsic);
+  g_free (extrinsic_str);
 }
 
 static gboolean
@@ -437,7 +437,7 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
         COLS_INTRINSIC);
     GST_WARNING_OBJECT (self,
         "Calibration matrix not set. Using default matrix %s.", intrinsic_str);
-    free (intrinsic_str);
+    g_free (intrinsic_str);
   }
 
   if (self->distortion_model == FISHEYE) {
@@ -523,7 +523,7 @@ gst_array_to_c_array (const GValue * gst_array, guint * rows, guint * cols)
   *rows = gst_value_array_get_size (gst_array);
   *cols = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));
 
-  c_array = malloc (*rows * *cols * sizeof (*c_array));
+  c_array = g_malloc (*rows * *cols * sizeof (*c_array));
 
   for (i = 0; i < *rows; i++) {
     row = gst_value_array_get_value (gst_array, i);
@@ -565,7 +565,7 @@ gst_vpi_undistort_set_calibration_matrix (GstVpiUndistort * self,
         cols, matrix_type == EXTRINSIC ? "extrinsic 3x4" : "intrinsic 2x3");
   }
 
-  free (matrix);
+  g_free (matrix);
 
   return ret;
 }
@@ -607,15 +607,15 @@ gst_vpi_undistort_get_calibration_matrix (GstVpiUndistort * self,
   g_return_if_fail (array);
 
   if (EXTRINSIC == matrix_type) {
-    matrix = malloc (rows * cols * sizeof (*matrix));
+    matrix = g_malloc (rows * cols * sizeof (*matrix));
     memcpy (matrix, &self->extrinsic, sizeof (self->extrinsic));
   } else {
-    matrix = malloc (rows * cols * sizeof (*matrix));
+    matrix = g_malloc (rows * cols * sizeof (*matrix));
     memcpy (matrix, &self->intrinsic, sizeof (self->intrinsic));
   }
   c_array_to_gst_array (array, matrix, rows, cols);
 
-  free (matrix);
+  g_free (matrix);
 }
 
 void

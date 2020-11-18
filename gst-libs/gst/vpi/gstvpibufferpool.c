@@ -33,7 +33,7 @@ G_DEFINE_TYPE_WITH_CODE (GstVpiBufferPool, gst_vpi_buffer_pool,
         "vpibufferpool", 0, "debug category for vpi buffer pool class"));
 
 /* prototypes */
-static gboolean gst_vpi_buffer_pool_set_config (GstCudaBufferPool * pool,
+static gboolean gst_vpi_buffer_pool_set_config (GstBufferPool * pool,
     GstStructure * config);
 static gboolean gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool,
     GstBuffer * buffer);
@@ -41,9 +41,10 @@ static gboolean gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool,
 static void
 gst_vpi_buffer_pool_class_init (GstVpiBufferPoolClass * klass)
 {
+  GstBufferPoolClass *buffer_pool_class = GST_BUFFER_POOL_CLASS (klass);
   GstCudaBufferPoolClass *cuda_pool_class = GST_CUDA_BUFFER_POOL_CLASS (klass);
 
-  cuda_pool_class->set_config =
+  buffer_pool_class->set_config =
       GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_set_config);
   cuda_pool_class->add_meta = GST_DEBUG_FUNCPTR (gst_vpi_buffer_pool_add_meta);
 }
@@ -55,15 +56,22 @@ gst_vpi_buffer_pool_init (GstVpiBufferPool * self)
 }
 
 static gboolean
-gst_vpi_buffer_pool_set_config (GstCudaBufferPool * pool, GstStructure * config)
+gst_vpi_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 {
   GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (pool);
   GstCaps *caps = NULL;
+  guint size = 0;
+  guint min_buffers = 0;
+  guint max_buffers = 0;
 
-  if (!gst_buffer_pool_config_get_params (config, &caps, NULL, NULL, NULL)) {
+  if (!GST_BUFFER_POOL_CLASS (gst_vpi_buffer_pool_parent_class)->set_config
+      (pool, config)) {
     GST_ERROR_OBJECT (self, "Error getting parameters from buffer pool config");
     return FALSE;
   }
+
+  gst_buffer_pool_config_get_params (config, &caps, &size, &min_buffers,
+      &max_buffers);
 
   return gst_video_info_from_caps (&self->video_info, caps);
 }

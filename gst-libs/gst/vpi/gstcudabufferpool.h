@@ -31,7 +31,6 @@ struct _GstCudaBufferPoolClass
   GstBufferPoolClass parent_class;
 
   gboolean (*add_meta) (GstCudaBufferPool * self, GstBuffer * buffer);
-  gboolean (*set_config) (GstCudaBufferPool * pool, GstStructure * config);
 };
 
 G_END_DECLS

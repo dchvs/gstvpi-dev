@@ -84,7 +84,6 @@ static gboolean
 gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 {
   GstCudaBufferPool *self = GST_CUDA_BUFFER_POOL (pool);
-  GstCudaBufferPoolClass *klass = NULL;
   GstCudaBufferPoolPrivate *priv =
       G_TYPE_INSTANCE_GET_PRIVATE (self, GST_CUDA_TYPE_BUFFER_POOL,
       GstCudaBufferPoolPrivate);
@@ -118,14 +117,6 @@ gst_cuda_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
       GST_BUFFER_POOL_OPTION_VIDEO_META);
   GST_DEBUG_OBJECT (self, "The client needs video meta: %s",
       priv->needs_video_meta ? "TRUE" : "FALSE");
-
-  klass = GST_CUDA_BUFFER_POOL_GET_CLASS (self);
-  if (klass->set_config) {
-    if (!klass->set_config (self, config)) {
-      GST_ERROR_OBJECT (self, "Unable to set configuration");
-      goto error;
-    }
-  }
 
   return
       GST_BUFFER_POOL_CLASS (gst_cuda_buffer_pool_parent_class)->set_config

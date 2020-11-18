@@ -10,29 +10,24 @@
  * back to RidgeRun without any encumbrance.
  */
 
-#ifndef __GST_CUDA_BUFFER_POOL_H__
-#define __GST_CUDA_BUFFER_POOL_H__
+#ifndef __GST_VPI_BUFFER_POOL_H__
+#define __GST_VPI_BUFFER_POOL_H__
 
 #include <gst/gst.h>
 
+#include "gstcudabufferpool.h"
+
 G_BEGIN_DECLS
 
-#define GST_CUDA_TYPE_BUFFER_POOL gst_cuda_buffer_pool_get_type ()
+#define GST_VPI_TYPE_BUFFER_POOL gst_vpi_buffer_pool_get_type()
 
 /**
- * GstCudaBufferPool:
+ * GstVpiBufferPool:
  *
- * The opaque #GstCudaBufferPool data structure.
+ * The opaque #GstVpiBufferPool data structure.
  */
-G_DECLARE_DERIVABLE_TYPE(GstCudaBufferPool, gst_cuda_buffer_pool, GST_CUDA, BUFFER_POOL, GstBufferPool);
-
-struct _GstCudaBufferPoolClass
-{
-  GstBufferPoolClass parent_class;
-
-  gboolean (*add_meta) (GstCudaBufferPool * self, GstBuffer * buffer);
-};
+G_DECLARE_FINAL_TYPE (GstVpiBufferPool, gst_vpi_buffer_pool, GST_VPI, BUFFER_POOL, GstCudaBufferPool);
 
 G_END_DECLS
 
-#endif // __GST_CUDA_BUFFER_POOL_H__
+#endif // __GST_VPI_BUFFER_POOL_H__

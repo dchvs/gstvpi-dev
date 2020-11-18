@@ -4,6 +4,7 @@ gst_lib_sources = [
   'gstcudabufferpool.c',
   'gstcudameta.c',
   'gstvpi.c',
+  'gstvpibufferpool.c',
   'gstvpifilter.c',
   'gstvpimeta.c'
 ]
@@ -13,6 +14,7 @@ gst_lib_headers = [
   'gstcudabufferpool.h',
   'gstcudameta.h',
   'gstvpi.h',
+  'gstvpibufferpool.c',
   'gstvpifilter.h',
   'gstvpimeta.h'
 ]

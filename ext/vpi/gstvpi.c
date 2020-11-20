@@ -18,6 +18,7 @@
 
 #include "gstvpidownload.h"
 #include "gstvpigaussianfilter.h"
+#include "gstvpiklttracker.h"
 #include "gstvpiundistort.h"
 #include "gstvpiupload.h"
 
@@ -35,6 +36,12 @@ vpi_init (GstPlugin * vpi)
   if (!gst_element_register (vpi, "vpigaussianfilter", GST_RANK_NONE,
           GST_TYPE_VPI_GAUSSIAN_FILTER)) {
     GST_ERROR ("Failed to register vpigaussianfilter");
+    goto out;
+  }
+
+  if (!gst_element_register (vpi, "vpiklttracker", GST_RANK_NONE,
+          GST_TYPE_VPI_KLT_TRACKER)) {
+    GST_ERROR ("Failed to register vpiklttracker");
     goto out;
   }
 

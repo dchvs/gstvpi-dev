@@ -147,6 +147,7 @@ gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
   self->klt_params.maxScaleChange = 0.2;
   self->klt_params.maxTranslationChange = 1.5;
   self->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
+
   self->box_frames = NULL;
   self->total_boxes = 0;
   self->frame_count = 0;
@@ -280,6 +281,7 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   g_return_if_fail (image);
 
   vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
+  /* Supported formats only have one plane */
   stride = vpi_image_data.planes[0].pitchBytes;
   image_data = (guint8 *) vpi_image_data.planes[0].data;
 
@@ -289,7 +291,7 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   trans = (VPIHomographyTransform2D *) trans_data.data;
 
   for (b = 0; b < self->box_count; b++) {
-    if (box[b].trackingStatus == 0) {
+    if (box[b].trackingStatus == VALID_TRACKING) {
       x = box[b].bbox.xform.mat3[0][2] + trans[b].mat3[0][2];
       y = box[b].bbox.xform.mat3[1][2] + trans[b].mat3[1][2];
       w = box[b].bbox.width * box[b].bbox.xform.mat3[0][0] *
@@ -404,19 +406,19 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
       self->input_box_array[i].templateStatus = updated_box[i].templateStatus;
 
       /* Skip boxes that are not being tracked */
-      if (updated_box[i].trackingStatus) {
+      if (VALID_TRACKING != updated_box[i].trackingStatus) {
         continue;
       }
       /* Must update template for this box ? */
-      if (updated_box[i].templateStatus) {
+      if (NEED_TEMPLATE_UPDATE == updated_box[i].templateStatus) {
         VPIHomographyTransform2D identity = { IDENTITY_TRANSFORM };
 
         /* Simple update approach */
         self->input_box_array[i] = updated_box[i];
-        self->input_box_array[i].templateStatus = 1;
+        self->input_box_array[i].templateStatus = NEED_TEMPLATE_UPDATE;
         self->input_trans_array[i] = identity;
       } else {
-        self->input_box_array[i].templateStatus = 0;
+        self->input_box_array[i].templateStatus = !NEED_TEMPLATE_UPDATE;
         self->input_trans_array[i] = updated_trans[i];
       }
     }

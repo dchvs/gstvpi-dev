@@ -29,6 +29,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_BE, GRAY16_LE }")
 
 #define VPI_ARRAY_CAPACITY 128
+#define MAX_BOUNDING_BOX 64
+#define MIN_BOUNDING_BOX_SIZE 4
+#define MAX_BOUNDING_BOX_SIZE 64
 #define NEED_TEMPLATE_UPDATE 1
 #define VALID_TRACKING 0
 #define NUM_BOX_PARAMS 5
@@ -126,7 +129,9 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
           "Nx5 matrix where N is the number of bounding boxes. Each bounding "
           "box (<f, x, y, w, h>) contains the frame (f) on which it first appears"
           ", the x and y positions (x, y) of the box top left corner, and the "
-          "width and height (w, h) of the bounding box.\n"
+          "width and height (w, h) of the bounding box. The maximum of bounding"
+          " boxes is 64, and the minimum and maximum size for each bounding box"
+          " is 4x4 and 64x64 respectively.\n"
           "Usage example: <<0.0,613.0,332.0,23.0,23.0>,<0.0,790.0,376.0,41.0,22.0>>",
           gst_param_spec_array ("bounding-boxes", "boxes", "boxes",
               g_param_spec_double ("boxes-params", "params", "params",
@@ -174,13 +179,16 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   GST_DEBUG_OBJECT (self, "start");
 
+  if (0 == self->total_boxes) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("No valid bounding boxes provided."), (NULL));
+    ret = FALSE;
+    goto out;
+  }
+
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
   format = GST_VIDEO_INFO_FORMAT (in_info);
-
-  if (0 == self->total_boxes) {
-    GST_WARNING_OBJECT (self, "No bounding boxes provided.");
-  }
 
   array_data.type = VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX;
   array_data.capacity = VPI_ARRAY_CAPACITY;
@@ -437,55 +445,82 @@ out:
   return ret;
 }
 
-static gboolean
+static void
 gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
     const GValue * gst_array)
 {
   const GValue *box = NULL;
-  gboolean ret = TRUE;
   guint boxes = 0;
   guint params = 0;
   guint i = 0;
+  guint frame = 0;
+  guint width = 0;
+  guint height = 0;
+  guint cur_frame = 0;
+  guint cur_box = 0;
   float identity[3][3] = IDENTITY_TRANSFORM;
 
-  g_return_val_if_fail (self, FALSE);
-  g_return_val_if_fail (gst_array, FALSE);
+  g_return_if_fail (self);
+  g_return_if_fail (gst_array);
 
   boxes = gst_value_array_get_size (gst_array);
   params = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));
 
-  if (NUM_BOX_PARAMS == params) {
-    self->box_frames = g_malloc (boxes * sizeof (guint));
-
-    for (i = 0; i < boxes; i++) {
-      box = gst_value_array_get_value (gst_array, i);
-      memcpy (&self->input_box_array[i].bbox.xform.mat3, &identity,
-          sizeof (identity));
-      self->box_frames[i] =
-          g_value_get_double (gst_value_array_get_value (box, FRAME));
-      self->input_box_array[i].bbox.xform.mat3[0][2] =
-          g_value_get_double (gst_value_array_get_value (box, X_POS));
-      self->input_box_array[i].bbox.xform.mat3[1][2] =
-          g_value_get_double (gst_value_array_get_value (box, Y_POS));
-      self->input_box_array[i].bbox.width =
-          g_value_get_double (gst_value_array_get_value (box, WIDTH));
-      self->input_box_array[i].bbox.height =
-          g_value_get_double (gst_value_array_get_value (box, HEIGHT));
-      self->input_box_array[i].trackingStatus = VALID_TRACKING;
-      self->input_box_array[i].templateStatus = NEED_TEMPLATE_UPDATE;
-      /* Identity transformation at the beginning */
-      memcpy (&self->input_trans_array[i].mat3, &identity, sizeof (identity));
-    }
-    self->total_boxes = boxes;
-
-  } else {
-    GST_ELEMENT_ERROR (self, LIBRARY, SETTINGS,
-        ("Bounding boxes must have 5 parameters. Received %d.", params),
-        (NULL));
-    ret = FALSE;
+  if (MAX_BOUNDING_BOX < boxes) {
+    GST_ERROR_OBJECT (self,
+        "Maximum amount of bounding boxes is 64. Received %d.", boxes);
+    goto out;
   }
 
-  return ret;
+  if (NUM_BOX_PARAMS != params) {
+    GST_ERROR_OBJECT (self,
+        "Bounding boxes must have 5 parameters. Received %d.", params);
+    goto out;
+  }
+
+  self->box_frames = g_malloc (boxes * sizeof (guint));
+
+  for (i = 0; i < boxes; i++) {
+    box = gst_value_array_get_value (gst_array, i);
+
+    frame = g_value_get_double (gst_value_array_get_value (box, FRAME));
+    if (cur_frame > frame) {
+      GST_ERROR_OBJECT (self, "Bounding boxes must be sorted by frame number");
+      self->total_boxes = 0;
+      goto out;
+    }
+
+    width = g_value_get_double (gst_value_array_get_value (box, WIDTH));
+    height = g_value_get_double (gst_value_array_get_value (box, HEIGHT));
+    if (MIN_BOUNDING_BOX_SIZE > width || MAX_BOUNDING_BOX_SIZE < width
+        || MIN_BOUNDING_BOX_SIZE > height || MAX_BOUNDING_BOX_SIZE < height) {
+      GST_WARNING_OBJECT (self,
+          "Size must be between 4x4 and 64x64. Received %dx%d. Discarding "
+          "bounding box %d.", width, height, i);
+      continue;
+    }
+
+    cur_frame = frame;
+    self->box_frames[cur_box] = frame;
+    memcpy (&self->input_box_array[cur_box].bbox.xform.mat3, &identity,
+        sizeof (identity));
+    self->input_box_array[cur_box].bbox.xform.mat3[0][2] =
+        g_value_get_double (gst_value_array_get_value (box, X_POS));
+    self->input_box_array[cur_box].bbox.xform.mat3[1][2] =
+        g_value_get_double (gst_value_array_get_value (box, Y_POS));
+    self->input_box_array[cur_box].bbox.width = width;
+    self->input_box_array[cur_box].bbox.height = height;
+    self->input_box_array[cur_box].trackingStatus = VALID_TRACKING;
+    self->input_box_array[cur_box].templateStatus = NEED_TEMPLATE_UPDATE;
+    memcpy (&self->input_trans_array[cur_box].mat3, &identity,
+        sizeof (identity));
+
+    cur_box++;
+  }
+  self->total_boxes = cur_box;
+
+out:
+  return;
 }
 
 static void

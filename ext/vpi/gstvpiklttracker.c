@@ -52,10 +52,10 @@ struct _GstVpiKltTracker
   VPIImage template_image;
   VPIKLTFeatureTrackerParams klt_params;
   VPIPayload klt;
-  gboolean set_box;
   guint *box_frames;
   guint frame_count;
-  guint num_box;
+  guint box_count;
+  guint total_boxes;
 };
 
 /* prototypes */
@@ -148,8 +148,9 @@ gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
   self->klt_params.maxTranslationChange = 1.5;
   self->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
   self->box_frames = NULL;
+  self->total_boxes = 0;
   self->frame_count = 0;
-  self->set_box = FALSE;
+  self->box_count = 0;
 }
 
 static gboolean
@@ -176,13 +177,13 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   height = GST_VIDEO_INFO_HEIGHT (in_info);
   format = GST_VIDEO_INFO_FORMAT (in_info);
 
-  if (!self->set_box) {
+  if (0 == self->total_boxes) {
     GST_WARNING_OBJECT (self, "No bounding boxes provided.");
   }
 
   array_data.type = VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX;
   array_data.capacity = VPI_ARRAY_CAPACITY;
-  array_data.size = self->num_box;
+  array_data.size = 0;
   array_data.data = &self->input_box_array[0];
 
   status = vpiArrayCreateHostMemWrapper (&array_data, VPI_BACKEND_ALL,
@@ -287,7 +288,7 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   box = (VPIKLTTrackedBoundingBox *) box_data.data;
   trans = (VPIHomographyTransform2D *) trans_data.data;
 
-  for (b = 0; b < self->num_box; b++) {
+  for (b = 0; b < self->box_count; b++) {
     if (box[b].trackingStatus == 0) {
       x = box[b].bbox.xform.mat3[0][2] + trans[b].mat3[0][2];
       y = box[b].bbox.xform.mat3[1][2] + trans[b].mat3[1][2];
@@ -309,6 +310,23 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   vpiArrayUnlock (self->input_trans_vpi_array);
 }
 
+static guint
+gst_vpi_klt_tracker_get_num_boxes_until_frame (GstVpiKltTracker * self,
+    guint frame)
+{
+  guint num_boxes = 0;
+  guint i = 0;
+
+  g_return_val_if_fail (self, num_boxes);
+
+  for (i = 0; i < self->total_boxes; i++) {
+    if (self->box_frames[i] <= frame) {
+      num_boxes++;
+    }
+  }
+  return num_boxes;
+}
+
 static GstFlowReturn
 gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     VPIImage in_image, VPIImage out_image)
@@ -320,6 +338,7 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
   VPIKLTTrackedBoundingBox *updated_box = NULL;
   VPIHomographyTransform2D *updated_trans = NULL;
   VPIStatus status = VPI_SUCCESS;
+  guint current_num_boxes = 0;
   guint i = 0;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
@@ -340,7 +359,24 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     GST_DEBUG_OBJECT (self, "Setting first frame");
 
   } else {
+    current_num_boxes =
+        gst_vpi_klt_tracker_get_num_boxes_until_frame (self,
+        self->frame_count - 1);
+
+    /* New bounding boxes in this frame */
+    if (self->box_count != current_num_boxes) {
+      vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+      vpiArraySetSize (self->input_box_vpi_array, current_num_boxes);
+      vpiArrayUnlock (self->input_box_vpi_array);
+      vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+      vpiArraySetSize (self->input_trans_vpi_array, current_num_boxes);
+      vpiArrayUnlock (self->input_trans_vpi_array);
+
+      self->box_count = current_num_boxes;
+    }
+
     gst_vpi_klt_tracker_draw_box_data (self, out_image);
+
     status =
         vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_image,
         self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
@@ -363,7 +399,7 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     updated_trans = (VPIHomographyTransform2D *) updated_trans_data.data;
 
     /* Set the input for next frame */
-    for (i = 0; i < self->num_box; i++) {
+    for (i = 0; i < self->box_count; i++) {
       self->input_box_array[i].trackingStatus = updated_box[i].trackingStatus;
       self->input_box_array[i].templateStatus = updated_box[i].templateStatus;
 
@@ -438,8 +474,7 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
       /* Identity transformation at the beginning */
       memcpy (&self->input_trans_array[i].mat3, &identity, sizeof (identity));
     }
-    self->num_box = boxes;
-    self->set_box = TRUE;
+    self->total_boxes = boxes;
 
   } else {
     GST_ELEMENT_ERROR (self, LIBRARY, SETTINGS,
@@ -463,7 +498,7 @@ gst_vpi_klt_tracker_get_bounding_boxes (GstVpiKltTracker * self,
   g_return_if_fail (self);
   g_return_if_fail (gst_array);
 
-  for (i = 0; i < self->num_box; i++) {
+  for (i = 0; i < self->total_boxes; i++) {
 
     guint params[NUM_BOX_PARAMS] = { self->box_frames[i],
       self->input_box_array[i].bbox.xform.mat3[0][2],
@@ -499,7 +534,7 @@ gst_vpi_klt_tracker_set_property (GObject * object, guint property_id,
     case PROP_0:
       break;
     case PROP_BOX:
-      self->set_box = gst_vpi_klt_tracker_set_bounding_boxes (self, value);
+      gst_vpi_klt_tracker_set_bounding_boxes (self, value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

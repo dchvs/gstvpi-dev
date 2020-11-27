@@ -18,7 +18,6 @@
 
 #include <gst/gst.h>
 #include <vpi/Array.h>
-#include <vpi/algo/Rescale.h>
 #include <vpi/algo/KLTFeatureTracker.h>
 
 #include "gst-libs/gst/vpi/gstvpi.h"
@@ -46,6 +45,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 struct _GstVpiKltTracker
 {
   GstVpiFilter parent;
+  /* According to VPI requirements arrays must be of 128 */
   VPIKLTTrackedBoundingBox input_box_array[VPI_ARRAY_CAPACITY];
   VPIHomographyTransform2D input_trans_array[VPI_ARRAY_CAPACITY];
   VPIArray input_box_vpi_array;
@@ -348,6 +348,8 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
   VPIKLTTrackedBoundingBox *updated_box = NULL;
   VPIHomographyTransform2D *updated_trans = NULL;
   VPIStatus status = VPI_SUCCESS;
+  VPIImageData vpi_in_image_data = { 0 };
+  VPIImageData vpi_out_image_data = { 0 };
   guint current_num_boxes = 0;
   guint i = 0;
 
@@ -360,10 +362,15 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
 
   GST_LOG_OBJECT (self, "Transform image");
 
-  /* Quick way for copying the in image contents */
-  vpiSubmitRescale (stream, VPI_BACKEND_CUDA, in_image, out_image,
-      VPI_INTERP_LINEAR_FAST, VPI_BOUNDARY_COND_ZERO);
-  vpiStreamSync (stream);
+  /* Copy input image to output image */
+  vpiImageLock (in_image, VPI_LOCK_READ, &vpi_in_image_data);
+  vpiImageLock (out_image, VPI_LOCK_READ_WRITE, &vpi_out_image_data);
+  memcpy (vpi_out_image_data.planes[0].data,
+      vpi_in_image_data.planes[0].data,
+      sizeof (guint8) * vpi_out_image_data.planes[0].height *
+      vpi_out_image_data.planes[0].pitchBytes);
+  vpiImageUnlock (in_image);
+  vpiImageUnlock (out_image);
 
   if (self->frame_count == 0) {
     GST_DEBUG_OBJECT (self, "Setting first frame");

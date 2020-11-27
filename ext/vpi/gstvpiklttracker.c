@@ -25,7 +25,7 @@
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_klt_tracker_debug_category
 
-#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_BE, GRAY16_LE }")
+#define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_LE }")
 
 #define VPI_ARRAY_CAPACITY 128
 #define MAX_BOUNDING_BOX 64
@@ -282,6 +282,8 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   VPIKLTTrackedBoundingBox *box = NULL;
   VPIHomographyTransform2D *trans = NULL;
   guint stride = 0;
+  VPIImageFormat format = 0;
+  guint scale_f = 0;
   guint b, i, j = 0;
   float x, y, h, w = 0;
 
@@ -291,12 +293,16 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
   /* Supported formats only have one plane */
   stride = vpi_image_data.planes[0].pitchBytes;
+  format = vpi_image_data.type;
   image_data = (guint8 *) vpi_image_data.planes[0].data;
 
   vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ, &box_data);
   vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ, &trans_data);
   box = (VPIKLTTrackedBoundingBox *) box_data.data;
   trans = (VPIHomographyTransform2D *) trans_data.data;
+
+  /* To address both types with same pointer */
+  scale_f = (VPI_IMAGE_FORMAT_U8 == format) ? 1 : 2;
 
   for (b = 0; b < self->box_count; b++) {
     if (box[b].trackingStatus == VALID_TRACKING) {
@@ -308,7 +314,7 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
           trans[b].mat3[1][1];
 
       for (i = y; i < y + h; i++) {
-        for (j = x; j < x + w; j++) {
+        for (j = scale_f * x; j < scale_f * (x + w); j++) {
           image_data[i * stride + j] = WHITE;
         }
       }
@@ -366,8 +372,7 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
   vpiImageLock (in_image, VPI_LOCK_READ, &vpi_in_image_data);
   vpiImageLock (out_image, VPI_LOCK_READ_WRITE, &vpi_out_image_data);
   memcpy (vpi_out_image_data.planes[0].data,
-      vpi_in_image_data.planes[0].data,
-      sizeof (guint8) * vpi_out_image_data.planes[0].height *
+      vpi_in_image_data.planes[0].data, vpi_out_image_data.planes[0].height *
       vpi_out_image_data.planes[0].pitchBytes);
   vpiImageUnlock (in_image);
   vpiImageUnlock (out_image);

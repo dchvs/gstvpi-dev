@@ -38,7 +38,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define IDENTITY_TRANSFORM { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} }
 
 #define DEFAULT_PROP_BOX_MIN 0
-#define DEFAULT_PROP_BOX_MAX G_MAXDOUBLE
+#define DEFAULT_PROP_BOX_MAX G_MAXINT
 
 #define DEFAULT_PROP_BOX 0
 
@@ -129,9 +129,9 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
           "top left corner, and the width and height (w, h) of the bounding "
           "box. The maximum of bounding boxes is 64, and the minimum and "
           "maximum size for each bounding box is 4x4 and 64x64 respectively.\n"
-          "Usage example: <<613.0,332.0,23.0,23.0>,<790.0,376.0,41.0,22.0>>",
+          "Usage example: <<613,332,23,23>,<790,376,41,22>>",
           gst_param_spec_array ("bounding-boxes", "boxes", "boxes",
-              g_param_spec_double ("boxes-params", "params", "params",
+              g_param_spec_int ("boxes-params", "params", "params",
                   DEFAULT_PROP_BOX_MIN, DEFAULT_PROP_BOX_MAX, DEFAULT_PROP_BOX,
                   (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
               (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
@@ -440,8 +440,8 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
   guint boxes = 0;
   guint params = 0;
   guint i = 0;
-  guint width = 0;
-  guint height = 0;
+  gint width = 0;
+  gint height = 0;
   guint cur_box = 0;
   float identity[3][3] = IDENTITY_TRANSFORM;
 
@@ -465,8 +465,8 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
 
   for (i = 0; i < boxes; i++) {
     box = gst_value_array_get_value (gst_array, i);
-    width = g_value_get_double (gst_value_array_get_value (box, WIDTH));
-    height = g_value_get_double (gst_value_array_get_value (box, HEIGHT));
+    width = g_value_get_int (gst_value_array_get_value (box, WIDTH));
+    height = g_value_get_int (gst_value_array_get_value (box, HEIGHT));
 
     if (MIN_BOUNDING_BOX_SIZE > width || MAX_BOUNDING_BOX_SIZE < width
         || MIN_BOUNDING_BOX_SIZE > height || MAX_BOUNDING_BOX_SIZE < height) {
@@ -479,9 +479,9 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
     memcpy (&self->input_box_array[cur_box].bbox.xform.mat3, &identity,
         sizeof (identity));
     self->input_box_array[cur_box].bbox.xform.mat3[0][2] =
-        g_value_get_double (gst_value_array_get_value (box, X_POS));
+        g_value_get_int (gst_value_array_get_value (box, X_POS));
     self->input_box_array[cur_box].bbox.xform.mat3[1][2] =
-        g_value_get_double (gst_value_array_get_value (box, Y_POS));
+        g_value_get_int (gst_value_array_get_value (box, Y_POS));
     self->input_box_array[cur_box].bbox.width = width;
     self->input_box_array[cur_box].bbox.height = height;
     self->input_box_array[cur_box].trackingStatus = VALID_TRACKING;
@@ -522,7 +522,7 @@ gst_vpi_klt_tracker_get_bounding_boxes (GstVpiKltTracker * self,
     for (j = 0; j < NUM_BOX_PARAMS; j++) {
 
       g_value_init (&value, G_TYPE_UINT);
-      g_value_set_double (&value, params[j]);
+      g_value_set_int (&value, params[j]);
       gst_value_array_append_value (&box, &value);
       g_value_unset (&value);
     }

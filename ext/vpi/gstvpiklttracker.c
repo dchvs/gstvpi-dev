@@ -33,7 +33,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define MAX_BOUNDING_BOX_SIZE 64
 #define NEED_TEMPLATE_UPDATE 1
 #define VALID_TRACKING 0
-#define NUM_BOX_PARAMS 5
+#define NUM_BOX_PARAMS 4
 #define WHITE 255
 #define IDENTITY_TRANSFORM { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} }
 
@@ -55,7 +55,6 @@ struct _GstVpiKltTracker
   VPIImage template_image;
   VPIKLTFeatureTrackerParams klt_params;
   VPIPayload klt;
-  guint *box_frames;
   guint frame_count;
   guint box_count;
   guint total_boxes;
@@ -81,7 +80,6 @@ enum
 
 enum
 {
-  FRAME,
   X_POS,
   Y_POS,
   WIDTH,
@@ -126,13 +124,12 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
   g_object_class_install_property (gobject_class, PROP_BOX,
       gst_param_spec_array ("boxes",
           "Bounding Boxes",
-          "Nx5 matrix where N is the number of bounding boxes. Each bounding "
-          "box (<f, x, y, w, h>) contains the frame (f) on which it first appears"
-          ", the x and y positions (x, y) of the box top left corner, and the "
-          "width and height (w, h) of the bounding box. The maximum of bounding"
-          " boxes is 64, and the minimum and maximum size for each bounding box"
-          " is 4x4 and 64x64 respectively.\n"
-          "Usage example: <<0.0,613.0,332.0,23.0,23.0>,<0.0,790.0,376.0,41.0,22.0>>",
+          "Nx4 matrix where N is the number of bounding boxes. Each bounding "
+          "box (<x, y, w, h>) contains the x and y positions (x, y) of the box "
+          "top left corner, and the width and height (w, h) of the bounding "
+          "box. The maximum of bounding boxes is 64, and the minimum and "
+          "maximum size for each bounding box is 4x4 and 64x64 respectively.\n"
+          "Usage example: <<613.0,332.0,23.0,23.0>,<790.0,376.0,41.0,22.0>>",
           gst_param_spec_array ("bounding-boxes", "boxes", "boxes",
               g_param_spec_double ("boxes-params", "params", "params",
                   DEFAULT_PROP_BOX_MIN, DEFAULT_PROP_BOX_MAX, DEFAULT_PROP_BOX,
@@ -153,7 +150,6 @@ gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
   self->klt_params.maxTranslationChange = 1.5;
   self->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
 
-  self->box_frames = NULL;
   self->total_boxes = 0;
   self->frame_count = 0;
   self->box_count = 0;
@@ -326,23 +322,6 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   vpiArrayUnlock (self->input_trans_vpi_array);
 }
 
-static guint
-gst_vpi_klt_tracker_get_num_boxes_until_frame (GstVpiKltTracker * self,
-    guint frame)
-{
-  guint num_boxes = 0;
-  guint i = 0;
-
-  g_return_val_if_fail (self, num_boxes);
-
-  for (i = 0; i < self->total_boxes; i++) {
-    if (self->box_frames[i] <= frame) {
-      num_boxes++;
-    }
-  }
-  return num_boxes;
-}
-
 static GstFlowReturn
 gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     VPIImage in_image, VPIImage out_image)
@@ -356,7 +335,6 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
   VPIStatus status = VPI_SUCCESS;
   VPIImageData vpi_in_image_data = { 0 };
   VPIImageData vpi_out_image_data = { 0 };
-  guint current_num_boxes = 0;
   guint i = 0;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
@@ -381,20 +359,17 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     GST_DEBUG_OBJECT (self, "Setting first frame");
 
   } else {
-    current_num_boxes =
-        gst_vpi_klt_tracker_get_num_boxes_until_frame (self,
-        self->frame_count - 1);
 
     /* New bounding boxes in this frame */
-    if (self->box_count != current_num_boxes) {
+    if (self->box_count != self->total_boxes) {
       vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (self->input_box_vpi_array, current_num_boxes);
+      vpiArraySetSize (self->input_box_vpi_array, self->total_boxes);
       vpiArrayUnlock (self->input_box_vpi_array);
       vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (self->input_trans_vpi_array, current_num_boxes);
+      vpiArraySetSize (self->input_trans_vpi_array, self->total_boxes);
       vpiArrayUnlock (self->input_trans_vpi_array);
 
-      self->box_count = current_num_boxes;
+      self->box_count = self->total_boxes;
     }
 
     gst_vpi_klt_tracker_draw_box_data (self, out_image);
@@ -465,10 +440,8 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
   guint boxes = 0;
   guint params = 0;
   guint i = 0;
-  guint frame = 0;
   guint width = 0;
   guint height = 0;
-  guint cur_frame = 0;
   guint cur_box = 0;
   float identity[3][3] = IDENTITY_TRANSFORM;
 
@@ -486,24 +459,15 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
 
   if (NUM_BOX_PARAMS != params) {
     GST_ERROR_OBJECT (self,
-        "Bounding boxes must have 5 parameters. Received %d.", params);
+        "Bounding boxes must have 4 parameters. Received %d.", params);
     goto out;
   }
 
-  self->box_frames = g_malloc (boxes * sizeof (guint));
-
   for (i = 0; i < boxes; i++) {
     box = gst_value_array_get_value (gst_array, i);
-
-    frame = g_value_get_double (gst_value_array_get_value (box, FRAME));
-    if (cur_frame > frame) {
-      GST_ERROR_OBJECT (self, "Bounding boxes must be sorted by frame number");
-      self->total_boxes = 0;
-      goto out;
-    }
-
     width = g_value_get_double (gst_value_array_get_value (box, WIDTH));
     height = g_value_get_double (gst_value_array_get_value (box, HEIGHT));
+
     if (MIN_BOUNDING_BOX_SIZE > width || MAX_BOUNDING_BOX_SIZE < width
         || MIN_BOUNDING_BOX_SIZE > height || MAX_BOUNDING_BOX_SIZE < height) {
       GST_WARNING_OBJECT (self,
@@ -512,8 +476,6 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
       continue;
     }
 
-    cur_frame = frame;
-    self->box_frames[cur_box] = frame;
     memcpy (&self->input_box_array[cur_box].bbox.xform.mat3, &identity,
         sizeof (identity));
     self->input_box_array[cur_box].bbox.xform.mat3[0][2] =
@@ -549,7 +511,7 @@ gst_vpi_klt_tracker_get_bounding_boxes (GstVpiKltTracker * self,
 
   for (i = 0; i < self->total_boxes; i++) {
 
-    guint params[NUM_BOX_PARAMS] = { self->box_frames[i],
+    guint params[NUM_BOX_PARAMS] = {
       self->input_box_array[i].bbox.xform.mat3[0][2],
       self->input_box_array[i].bbox.xform.mat3[1][2],
       self->input_box_array[i].bbox.width,
@@ -648,8 +610,6 @@ gst_vpi_klt_tracker_finalize (GObject * object)
   GstVpiKltTracker *self = GST_VPI_KLT_TRACKER (object);
 
   GST_DEBUG_OBJECT (self, "finalize");
-
-  g_free (self->box_frames);
 
   G_OBJECT_CLASS (gst_vpi_klt_tracker_parent_class)->finalize (object);
 }

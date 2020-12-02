@@ -151,8 +151,6 @@ gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
   self->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
 
   self->total_boxes = 0;
-  self->frame_count = 0;
-  self->box_count = 0;
 }
 
 static gboolean
@@ -181,6 +179,10 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     ret = FALSE;
     goto out;
   }
+
+  self->box_count = 0;
+  self->frame_count = 0;
+  self->template_image = NULL;
 
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
@@ -603,6 +605,8 @@ gst_vpi_klt_tracker_stop (GstBaseTransform * trans)
 
   vpiPayloadDestroy (self->klt);
   self->klt = NULL;
+
+  self->template_image = NULL;
 
   return ret;
 }

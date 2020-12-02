@@ -457,14 +457,17 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
     goto out;
   }
 
-  if (NUM_BOX_PARAMS != params) {
-    GST_ERROR_OBJECT (self,
-        "Bounding boxes must have 4 parameters. Received %d.", params);
-    goto out;
-  }
-
   for (i = 0; i < boxes; i++) {
     box = gst_value_array_get_value (gst_array, i);
+    params = gst_value_array_get_size (box);
+
+    if (NUM_BOX_PARAMS != params) {
+      GST_ERROR_OBJECT (self,
+          "Bounding boxes must have 4 parameters. Box %d has %d parameters.", i,
+          params);
+      goto out;
+    }
+
     width = g_value_get_int (gst_value_array_get_value (box, WIDTH));
     height = g_value_get_int (gst_value_array_get_value (box, HEIGHT));
 

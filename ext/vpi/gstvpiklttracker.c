@@ -345,20 +345,107 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   vpiArrayUnlock (self->input_trans_vpi_array);
 }
 
+static void
+gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
+{
+  VPIArrayData updated_box_data = { 0 };
+  VPIArrayData updated_trans_data = { 0 };
+  VPIKLTTrackedBoundingBox *updated_box = NULL;
+  VPIHomographyTransform2D *updated_trans = NULL;
+  guint i = 0;
+
+  g_return_if_fail (self);
+
+  vpiArrayLock (self->output_box_vpi_array, VPI_LOCK_READ, &updated_box_data);
+  vpiArrayLock (self->output_trans_vpi_array, VPI_LOCK_READ,
+      &updated_trans_data);
+  updated_box = (VPIKLTTrackedBoundingBox *) updated_box_data.data;
+  updated_trans = (VPIHomographyTransform2D *) updated_trans_data.data;
+
+  /* Set the input for next frame */
+  for (i = 0; i < self->box_count; i++) {
+    self->input_box_array[i].trackingStatus = updated_box[i].trackingStatus;
+    self->input_box_array[i].templateStatus = updated_box[i].templateStatus;
+
+    /* Skip boxes that are not being tracked */
+    if (VALID_TRACKING != updated_box[i].trackingStatus) {
+      continue;
+    }
+    /* Must update template for this box ? */
+    if (NEED_TEMPLATE_UPDATE == updated_box[i].templateStatus) {
+      VPIHomographyTransform2D identity = { IDENTITY_TRANSFORM };
+
+      /* Simple update approach */
+      self->input_box_array[i] = updated_box[i];
+      self->input_box_array[i].templateStatus = NEED_TEMPLATE_UPDATE;
+      self->input_trans_array[i] = identity;
+    } else {
+      self->input_box_array[i].templateStatus = !NEED_TEMPLATE_UPDATE;
+      self->input_trans_array[i] = updated_trans[i];
+    }
+  }
+  vpiArrayUnlock (self->output_box_vpi_array);
+  vpiArrayUnlock (self->output_trans_vpi_array);
+}
+
+static void
+gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
+    VPIStream stream, VPIImage in_image, VPIImage out_image)
+{
+  VPIStatus status = VPI_SUCCESS;
+
+  g_return_if_fail (self);
+  g_return_if_fail (stream);
+  g_return_if_fail (in_image);
+  g_return_if_fail (out_image);
+
+  /* New bounding boxes in this frame */
+  if (self->box_count != self->total_boxes) {
+    vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+    vpiArraySetSize (self->input_box_vpi_array, self->total_boxes);
+    vpiArrayUnlock (self->input_box_vpi_array);
+    vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+    vpiArraySetSize (self->input_trans_vpi_array, self->total_boxes);
+    vpiArrayUnlock (self->input_trans_vpi_array);
+
+    self->box_count = self->total_boxes;
+  }
+
+  status =
+      vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_image,
+      self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
+      self->output_box_vpi_array, self->output_trans_vpi_array,
+      &self->klt_params);
+
+  if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not predict the new bounding boxes."), ("Code error: %s",
+            vpiStatusGetName (status)));
+    goto out;
+  }
+
+  vpiStreamSync (stream);
+
+  gst_vpi_klt_tracker_update_bounding_boxes_status (self);
+
+  /* Force arrays to update because wrapped memory has been modifed */
+  vpiArrayInvalidate (self->input_box_vpi_array);
+  vpiArrayInvalidate (self->input_trans_vpi_array);
+
+  gst_vpi_klt_tracker_draw_box_data (self, out_image);
+
+out:
+  return;
+}
+
 static GstFlowReturn
 gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     VPIImage in_image, VPIImage out_image)
 {
   GstVpiKltTracker *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  VPIArrayData updated_box_data = { 0 };
-  VPIArrayData updated_trans_data = { 0 };
-  VPIKLTTrackedBoundingBox *updated_box = NULL;
-  VPIHomographyTransform2D *updated_trans = NULL;
-  VPIStatus status = VPI_SUCCESS;
   VPIImageData vpi_in_image_data = { 0 };
   VPIImageData vpi_out_image_data = { 0 };
-  guint i = 0;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -383,76 +470,12 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
     self->first_frame = FALSE;
 
   } else {
-
-    /* New bounding boxes in this frame */
-    if (self->box_count != self->total_boxes) {
-      vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (self->input_box_vpi_array, self->total_boxes);
-      vpiArrayUnlock (self->input_box_vpi_array);
-      vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (self->input_trans_vpi_array, self->total_boxes);
-      vpiArrayUnlock (self->input_trans_vpi_array);
-
-      self->box_count = self->total_boxes;
-    }
-
-    gst_vpi_klt_tracker_draw_box_data (self, out_image);
-
-    status =
-        vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_image,
-        self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
-        self->output_box_vpi_array, self->output_trans_vpi_array,
-        &self->klt_params);
-
-    if (VPI_SUCCESS != status) {
-      GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-          ("Could not predict the new bounding boxes."), ("Code error: %s",
-              vpiStatusGetName (status)));
-      ret = GST_FLOW_ERROR;
-      goto out;
-    }
-
-    vpiStreamSync (stream);
-
-    vpiArrayLock (self->output_box_vpi_array, VPI_LOCK_READ, &updated_box_data);
-    vpiArrayLock (self->output_trans_vpi_array, VPI_LOCK_READ,
-        &updated_trans_data);
-    updated_box = (VPIKLTTrackedBoundingBox *) updated_box_data.data;
-    updated_trans = (VPIHomographyTransform2D *) updated_trans_data.data;
-
-    /* Set the input for next frame */
-    for (i = 0; i < self->box_count; i++) {
-      self->input_box_array[i].trackingStatus = updated_box[i].trackingStatus;
-      self->input_box_array[i].templateStatus = updated_box[i].templateStatus;
-
-      /* Skip boxes that are not being tracked */
-      if (VALID_TRACKING != updated_box[i].trackingStatus) {
-        continue;
-      }
-      /* Must update template for this box ? */
-      if (NEED_TEMPLATE_UPDATE == updated_box[i].templateStatus) {
-        VPIHomographyTransform2D identity = { IDENTITY_TRANSFORM };
-
-        /* Simple update approach */
-        self->input_box_array[i] = updated_box[i];
-        self->input_box_array[i].templateStatus = NEED_TEMPLATE_UPDATE;
-        self->input_trans_array[i] = identity;
-      } else {
-        self->input_box_array[i].templateStatus = !NEED_TEMPLATE_UPDATE;
-        self->input_trans_array[i] = updated_trans[i];
-      }
-    }
-
-    vpiArrayUnlock (self->output_box_vpi_array);
-    vpiArrayUnlock (self->output_trans_vpi_array);
-    /* Force arrays to update because wrapped memory has been modifed */
-    vpiArrayInvalidate (self->input_box_vpi_array);
-    vpiArrayInvalidate (self->input_trans_vpi_array);
+    gst_vpi_klt_tracker_track_bounding_boxes (self, stream, in_image,
+        out_image);
   }
 
   self->template_image = in_image;
 
-out:
   return ret;
 }
 

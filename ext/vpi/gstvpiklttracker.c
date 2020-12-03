@@ -392,6 +392,7 @@ static void
 gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
     VPIStream stream, VPIImage in_image, VPIImage out_image)
 {
+  guint total_boxes = 0;
   VPIStatus status = VPI_SUCCESS;
 
   g_return_if_fail (self);
@@ -399,23 +400,29 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
   g_return_if_fail (in_image);
   g_return_if_fail (out_image);
 
+  GST_OBJECT_LOCK (self);
+  total_boxes = self->total_boxes;
+  GST_OBJECT_UNLOCK (self);
+
   /* New bounding boxes in this frame */
-  if (self->box_count != self->total_boxes) {
+  if (self->box_count != total_boxes) {
     vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-    vpiArraySetSize (self->input_box_vpi_array, self->total_boxes);
+    vpiArraySetSize (self->input_box_vpi_array, total_boxes);
     vpiArrayUnlock (self->input_box_vpi_array);
     vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-    vpiArraySetSize (self->input_trans_vpi_array, self->total_boxes);
+    vpiArraySetSize (self->input_trans_vpi_array, total_boxes);
     vpiArrayUnlock (self->input_trans_vpi_array);
 
-    self->box_count = self->total_boxes;
+    self->box_count = total_boxes;
   }
 
+  GST_OBJECT_LOCK (self);
   status =
       vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_image,
       self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
       self->output_box_vpi_array, self->output_trans_vpi_array,
       &self->klt_params);
+  GST_OBJECT_UNLOCK (self);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

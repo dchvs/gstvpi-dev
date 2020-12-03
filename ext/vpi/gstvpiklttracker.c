@@ -217,7 +217,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not wrap bounding boxes into VPIArray."), (NULL));
+        ("Could not wrap bounding boxes into VPIArray."), ("Code error: %s",
+            vpiStatusGetName (status)));
     ret = FALSE;
     goto out;
   }
@@ -227,7 +228,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not wrap homographies into VPIArray."), (NULL));
+        ("Could not wrap homographies into VPIArray."), ("Code error: %s",
+            vpiStatusGetName (status)));
     ret = FALSE;
     goto free_in_box_array;
   }
@@ -237,7 +239,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not create KLT tracker payload."), (NULL));
+        ("Could not create KLT tracker payload."), ("Code error: %s",
+            vpiStatusGetName (status)));
     ret = FALSE;
     goto free_in_trans_array;
   }
@@ -248,7 +251,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not create output bounding box array."), (NULL));
+        ("Could not create output bounding box array."), ("Code error: %s",
+            vpiStatusGetName (status)));
     ret = FALSE;
     goto free_klt;
   }
@@ -259,7 +263,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not create output homographies array."), (NULL));
+        ("Could not create output homographies array."), ("Code error: %s",
+            vpiStatusGetName (status)));
     ret = FALSE;
     goto free_out_box_array;
   }
@@ -400,7 +405,8 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
 
     if (VPI_SUCCESS != status) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-          ("Could not predict the new bounding boxes."), (NULL));
+          ("Could not predict the new bounding boxes."), ("Code error: %s",
+              vpiStatusGetName (status)));
       ret = GST_FLOW_ERROR;
       goto out;
     }

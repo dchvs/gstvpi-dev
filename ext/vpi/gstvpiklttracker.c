@@ -55,7 +55,7 @@ struct _GstVpiKltTracker
   VPIImage template_image;
   VPIKLTFeatureTrackerParams klt_params;
   VPIPayload klt;
-  guint frame_count;
+  gboolean first_frame;
   guint box_count;
   guint total_boxes;
 };
@@ -201,8 +201,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     goto out;
   }
 
+  self->first_frame = TRUE;
   self->box_count = 0;
-  self->frame_count = 0;
   self->template_image = NULL;
 
   width = GST_VIDEO_INFO_WIDTH (in_info);
@@ -378,8 +378,9 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
   vpiImageUnlock (in_image);
   vpiImageUnlock (out_image);
 
-  if (self->frame_count == 0) {
+  if (self->first_frame) {
     GST_DEBUG_OBJECT (self, "Setting first frame");
+    self->first_frame = FALSE;
 
   } else {
 
@@ -450,7 +451,6 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
   }
 
   self->template_image = in_image;
-  self->frame_count++;
 
 out:
   return ret;

@@ -153,6 +153,27 @@ gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
   self->total_boxes = 0;
 }
 
+static VPIStatus
+gst_vpi_klt_tracker_wrap_vpi_array (GstVpiKltTracker * self,
+    VPIArrayData * array_data, VPIArrayType type)
+{
+  VPIArray *array = NULL;
+
+  g_return_val_if_fail (self, VPI_ERROR_INVALID_ARGUMENT);
+  g_return_val_if_fail (array_data, VPI_ERROR_INVALID_ARGUMENT);
+
+  array_data->type = type;
+
+  if (VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX == type) {
+    array_data->data = self->input_box_array;
+    array = &self->input_box_vpi_array;
+  } else {
+    array_data->data = self->input_trans_array;
+    array = &self->input_trans_vpi_array;
+  }
+  return vpiArrayCreateHostMemWrapper (array_data, VPI_BACKEND_ALL, array);
+}
+
 static gboolean
 gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     GstVideoInfo * out_info)
@@ -188,13 +209,11 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   height = GST_VIDEO_INFO_HEIGHT (in_info);
   format = GST_VIDEO_INFO_FORMAT (in_info);
 
-  array_data.type = VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX;
   array_data.capacity = VPI_ARRAY_CAPACITY;
   array_data.size = 0;
-  array_data.data = &self->input_box_array[0];
 
-  status = vpiArrayCreateHostMemWrapper (&array_data, VPI_BACKEND_ALL,
-      &self->input_box_vpi_array);
+  status = gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
+      VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -203,11 +222,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     goto out;
   }
 
-  array_data.type = VPI_ARRAY_TYPE_HOMOGRAPHY_TRANSFORM_2D;
-  array_data.data = &self->input_trans_array[0];
-
-  status = vpiArrayCreateHostMemWrapper (&array_data, VPI_BACKEND_ALL,
-      &self->input_trans_vpi_array);
+  status = gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
+      VPI_ARRAY_TYPE_HOMOGRAPHY_TRANSFORM_2D);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

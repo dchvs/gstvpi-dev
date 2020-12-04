@@ -132,16 +132,7 @@ GST_START_TEST (test_fail_when_redefining_boxes_on_the_fly)
   /* Test to process the old boxes and the new boxes for a while */
   g_usleep (SLEEP_TIME);
 
-  /* Pause the pipeline to update the property, otherwise a lock may occur */
-  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_PAUSED),
-      GST_STATE_CHANGE_ASYNC);
-  fail_unless_equals_int (gst_element_get_state (pipeline, NULL, NULL, -1),
-      GST_STATE_CHANGE_SUCCESS);
   g_object_set_property (G_OBJECT (tracker), "boxes", &gst_array);
-
-  /* Resume playing */
-  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_PLAYING),
-      GST_STATE_CHANGE_SUCCESS);
 
   g_usleep (SLEEP_TIME);
 

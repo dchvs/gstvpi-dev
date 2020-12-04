@@ -255,6 +255,8 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   g_return_if_fail (self);
   g_return_if_fail (image);
 
+  GST_OBJECT_LOCK (self);
+
   vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
   /* Supported formats only have one plane */
   stride = vpi_image_data.planes[0].pitchBytes;
@@ -289,6 +291,8 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   vpiImageUnlock (image);
   vpiArrayUnlock (self->input_box_vpi_array);
   vpiArrayUnlock (self->input_trans_vpi_array);
+
+  GST_OBJECT_UNLOCK (self);
 }
 
 static void
@@ -351,6 +355,7 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
       self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
       self->output_box_vpi_array, self->output_trans_vpi_array,
       &self->klt_params);
+  vpiStreamSync (stream);
   GST_OBJECT_UNLOCK (self);
 
   if (VPI_SUCCESS != status) {
@@ -360,13 +365,13 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
     goto out;
   }
 
-  vpiStreamSync (stream);
-
   gst_vpi_klt_tracker_update_bounding_boxes_status (self);
 
   /* Force arrays to update because wrapped memory has been modifed */
+  GST_OBJECT_LOCK (self);
   vpiArrayInvalidate (self->input_box_vpi_array);
   vpiArrayInvalidate (self->input_trans_vpi_array);
+  GST_OBJECT_UNLOCK (self);
 
   gst_vpi_klt_tracker_draw_box_data (self, out_image);
 

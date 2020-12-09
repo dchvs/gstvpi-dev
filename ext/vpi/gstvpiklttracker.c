@@ -492,6 +492,9 @@ gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
   guint cur_box = 0;
   float identity[3][3] = IDENTITY_TRANSFORM;
 
+  g_return_val_if_fail (self, ret);
+  g_return_val_if_fail (gst_array, ret);
+
   for (i = 0; i < boxes; i++) {
     box = gst_value_array_get_value (gst_array, i);
     params = gst_value_array_get_size (box);

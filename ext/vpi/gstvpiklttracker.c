@@ -422,22 +422,16 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
 
 static VPIStatus
 gst_vpi_klt_tracker_wrap_vpi_array (GstVpiKltTracker * self,
-    VPIArrayData * array_data, VPIArrayType type)
+    VPIArrayData * array_data, void *data, VPIArray * array, VPIArrayType type)
 {
-  VPIArray *array = NULL;
-
   g_return_val_if_fail (self, VPI_ERROR_INVALID_ARGUMENT);
   g_return_val_if_fail (array_data, VPI_ERROR_INVALID_ARGUMENT);
+  g_return_val_if_fail (data, VPI_ERROR_INVALID_ARGUMENT);
+  g_return_val_if_fail (array, VPI_ERROR_INVALID_ARGUMENT);
 
   array_data->type = type;
+  array_data->data = data;
 
-  if (VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX == type) {
-    array_data->data = self->input_box_array;
-    array = &self->input_box_vpi_array;
-  } else {
-    array_data->data = self->input_trans_array;
-    array = &self->input_trans_vpi_array;
-  }
   return vpiArrayCreateHostMemWrapper (array_data, VPI_BACKEND_ALL, array);
 }
 
@@ -452,7 +446,9 @@ gst_vpi_klt_tracker_set_vpi_arrays (GstVpiKltTracker * self, guint size)
   array_data.capacity = VPI_ARRAY_CAPACITY;
   array_data.size = size;
 
-  status = gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
+  status =
+      gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
+      self->input_box_array, &self->input_box_vpi_array,
       VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX);
 
   if (VPI_SUCCESS != status) {
@@ -461,7 +457,9 @@ gst_vpi_klt_tracker_set_vpi_arrays (GstVpiKltTracker * self, guint size)
     goto out;
   }
 
-  status = gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
+  status =
+      gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
+      self->input_trans_array, &self->input_trans_vpi_array,
       VPI_ARRAY_TYPE_HOMOGRAPHY_TRANSFORM_2D);
 
   if (VPI_SUCCESS != status) {

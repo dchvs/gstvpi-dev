@@ -626,7 +626,7 @@ gst_vpi_klt_tracker_get_bounding_boxes (GstVpiKltTracker * self,
 
     for (j = 0; j < NUM_BOX_PARAMS; j++) {
 
-      g_value_init (&value, G_TYPE_UINT);
+      g_value_init (&value, G_TYPE_INT);
       g_value_set_int (&value, params[j]);
       gst_value_array_append_value (&box, &value);
       g_value_unset (&value);

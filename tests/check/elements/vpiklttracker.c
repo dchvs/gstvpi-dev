@@ -14,7 +14,6 @@
 
 #include "tests/check/test_utils.h"
 
-#define NUMBER_BOXES 5
 #define NUMBER_PARAMS 4
 #define SLEEP_TIME 500000
 
@@ -85,39 +84,74 @@ GST_START_TEST (test_fail_when_more_than_64_box_provided)
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_when_redefining_boxes_on_the_fly)
+static void
+c_array_to_gst_array (GValue * gst_array, gint c_array[][NUMBER_PARAMS],
+    guint rows, guint cols)
 {
-  GstElement *pipeline = NULL;
-  GstElement *tracker = NULL;
-  GValue gst_array = G_VALUE_INIT;
-  GValue box = G_VALUE_INIT;
+  GValue row = G_VALUE_INIT;
   GValue value = G_VALUE_INIT;
   guint i = 0;
   guint j = 0;
-  gint array[NUMBER_BOXES][NUMBER_PARAMS] = { {613, 332, 23, 23}
-  , {669, 329, 30, 30}
-  , {790, 376, 41, 22}
-  , {669, 329, 30, 30}
-  , {669, 329, 30, 30}
-  };
 
-  g_value_init (&gst_array, GST_TYPE_ARRAY);
+  g_return_if_fail (gst_array);
+  g_return_if_fail (c_array);
 
-  for (i = 0; i < NUMBER_BOXES; i++) {
+  for (i = 0; i < rows; i++) {
+    g_value_init (&row, GST_TYPE_ARRAY);
 
-    g_value_init (&box, GST_TYPE_ARRAY);
-
-    for (j = 0; j < NUMBER_PARAMS; j++) {
-
+    for (j = 0; j < cols; j++) {
       g_value_init (&value, G_TYPE_INT);
-      g_value_set_int (&value, array[i][j]);
-      gst_value_array_append_value (&box, &value);
+      g_value_set_int (&value, c_array[i][j]);
+      gst_value_array_append_value (&row, &value);
       g_value_unset (&value);
     }
 
-    gst_value_array_append_value (&gst_array, &box);
-    g_value_unset (&box);
+    gst_value_array_append_value (gst_array, &row);
+    g_value_unset (&row);
   }
+}
+
+static void
+compare_c_array_with_gst_array (GValue * gst_array,
+    gint c_array[][NUMBER_PARAMS], gint rows)
+{
+  const GValue *row = NULL;
+  gint value = 0;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_if_fail (gst_array);
+  g_return_if_fail (c_array);
+
+  /* Verify size of arrays is the same */
+  fail_unless_equals_int (gst_value_array_get_size (gst_array), rows);
+  fail_unless_equals_int (gst_value_array_get_size (gst_value_array_get_value
+          (gst_array, 0)), NUMBER_PARAMS);
+
+  for (i = 0; i < rows; i++) {
+    row = gst_value_array_get_value (gst_array, i);
+    for (j = 0; j < NUMBER_PARAMS; j++) {
+      value = g_value_get_int (gst_value_array_get_value (row, j));
+      fail_unless_equals_int (value, c_array[i][j]);
+    }
+  }
+}
+
+static void
+test_redefine_boxes_on_the_fly (gint set_array[][NUMBER_PARAMS],
+    gint get_array[][NUMBER_PARAMS], gint set_boxes, gint get_boxes)
+{
+  GstElement *pipeline = NULL;
+
+  GstElement *tracker = NULL;
+  GValue set_gst_array = G_VALUE_INIT;
+  GValue get_gst_array = G_VALUE_INIT;
+
+  g_value_init (&set_gst_array, GST_TYPE_ARRAY);
+  g_value_init (&get_gst_array, GST_TYPE_ARRAY);
+
+  c_array_to_gst_array (&set_gst_array, set_array, set_boxes, NUMBER_PARAMS);
+  c_array_to_gst_array (&get_gst_array, get_array, get_boxes, NUMBER_PARAMS);
 
   pipeline =
       test_create_pipeline (test_pipes[TEST_REDEFINING_BOXES_ON_THE_FLY]);
@@ -132,7 +166,10 @@ GST_START_TEST (test_fail_when_redefining_boxes_on_the_fly)
   /* Test to process the old boxes and the new boxes for a while */
   g_usleep (SLEEP_TIME);
 
-  g_object_set_property (G_OBJECT (tracker), "boxes", &gst_array);
+  g_object_set_property (G_OBJECT (tracker), "boxes", &set_gst_array);
+  g_object_get_property (G_OBJECT (tracker), "boxes", &get_gst_array);
+  /* Test if what gst gets is what was expected */
+  compare_c_array_with_gst_array (&get_gst_array, get_array, get_boxes);
 
   g_usleep (SLEEP_TIME);
 
@@ -140,6 +177,43 @@ GST_START_TEST (test_fail_when_redefining_boxes_on_the_fly)
       GST_STATE_CHANGE_SUCCESS);
 
   gst_object_unref (pipeline);
+}
+
+GST_START_TEST (test_redefine_to_less_boxes_on_the_fly)
+{
+  gint set_array[1][NUMBER_PARAMS] = { {613, 372, 53, 23} };
+  test_redefine_boxes_on_the_fly (set_array, set_array, 1, 1);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_redefine_to_more_boxes_on_the_fly)
+{
+  gint set_array[5][NUMBER_PARAMS] = { {613, 332, 23, 23}
+  , {669, 329, 50, 30}
+  , {790, 376, 41, 22}
+  , {669, 329, 30, 30}
+  , {669, 329, 50, 30}
+  };
+  test_redefine_boxes_on_the_fly (set_array, set_array, 5, 5);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_redefine_and_discard_boxes_on_the_fly)
+{
+  gint set_array[5][NUMBER_PARAMS] = { {613, 332, 80, 23}
+  , {669, 329, 50, 30}
+  , {790, 376, 41, 90}
+  , {669, 329, 60, 30}
+  , {669, 329, 50, 1000}
+  };
+  gint get_array[2][NUMBER_PARAMS] = { {669, 329, 50, 30}
+  , {669, 329, 60, 30}
+  };
+  /* Here some boxes have invalid dimensions, therefore set and get arrays
+     are different */
+  test_redefine_boxes_on_the_fly (set_array, get_array, 5, 2);
 }
 
 GST_END_TEST;
@@ -155,7 +229,9 @@ gst_vpi_klt_tracker_suite (void)
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray_16);
   tcase_add_test (tc, test_fail_when_invalid_number_of_box_params);
   tcase_add_test (tc, test_fail_when_more_than_64_box_provided);
-  tcase_add_test (tc, test_fail_when_redefining_boxes_on_the_fly);
+  tcase_add_test (tc, test_redefine_to_more_boxes_on_the_fly);
+  tcase_add_test (tc, test_redefine_to_less_boxes_on_the_fly);
+  tcase_add_test (tc, test_redefine_and_discard_boxes_on_the_fly);
 
   return suite;
 }

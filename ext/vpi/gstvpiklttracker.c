@@ -313,6 +313,7 @@ gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
   updated_trans = (VPIHomographyTransform2D *) updated_trans_data.data;
 
   /* Set the input for next frame */
+  GST_OBJECT_LOCK (self);
   for (i = 0; i < self->total_boxes; i++) {
     self->input_box_array[i].trackingStatus = updated_box[i].trackingStatus;
     self->input_box_array[i].templateStatus = updated_box[i].templateStatus;
@@ -334,6 +335,7 @@ gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
       self->input_trans_array[i] = updated_trans[i];
     }
   }
+  GST_OBJECT_UNLOCK (self);
   vpiArrayUnlock (self->output_box_vpi_array);
   vpiArrayUnlock (self->output_trans_vpi_array);
 }
@@ -689,20 +691,24 @@ gst_vpi_klt_tracker_stop (GstBaseTransform * trans)
 
   GST_DEBUG_OBJECT (self, "stop");
 
+  GST_OBJECT_LOCK (self);
+
   vpiArrayDestroy (self->input_trans_vpi_array);
   self->input_trans_vpi_array = NULL;
 
   vpiArrayDestroy (self->input_box_vpi_array);
   self->input_box_vpi_array = NULL;
 
+  vpiPayloadDestroy (self->klt);
+  self->klt = NULL;
+
+  GST_OBJECT_UNLOCK (self);
+
   vpiArrayDestroy (self->output_trans_vpi_array);
   self->output_trans_vpi_array = NULL;
 
   vpiArrayDestroy (self->output_box_vpi_array);
   self->output_box_vpi_array = NULL;
-
-  vpiPayloadDestroy (self->klt);
-  self->klt = NULL;
 
   self->template_image = NULL;
 

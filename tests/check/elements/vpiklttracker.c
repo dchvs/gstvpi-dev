@@ -14,6 +14,7 @@
 
 #include "tests/check/test_utils.h"
 
+#define MAX_BOXES 64
 #define NUMBER_PARAMS 4
 #define SLEEP_TIME 500000
 
@@ -64,22 +65,44 @@ GST_START_TEST (test_fail_when_invalid_number_of_box_params)
 
 GST_END_TEST;
 
-GST_START_TEST (test_fail_when_more_than_64_box_provided)
+GST_START_TEST (test_discard_when_more_than_64_box_provided)
 {
-  gint num_boxes = 64;
+  GstElement *pipeline = NULL;
+  GstElement *tracker = NULL;
+  gint num_boxes = 68;
   gchar pipe[2048];
   gchar box[] = "<613,332,23,23>";
   gint i = 0;
+  GValue get_gst_array = G_VALUE_INIT;
 
   g_sprintf (pipe, "videotestsrc ! capsfilter caps=video/x-raw,width=1280,"
-      "height=720 ! vpiupload ! vpiklttracker boxes=\"<");
+      "height=720 ! vpiupload ! vpiklttracker name=tracker boxes=\"<");
 
   for (i = 0; i < num_boxes; i++) {
     g_sprintf (pipe, "%s%s,", pipe, box);
   }
   g_sprintf (pipe, "%s%s>\" ! vpidownload ! fakesink", pipe, box);
 
-  test_fail_properties_configuration (pipe);
+  g_value_init (&get_gst_array, GST_TYPE_ARRAY);
+
+  pipeline = test_create_pipeline (pipe);
+
+  tracker = gst_bin_get_by_name (GST_BIN (pipeline), "tracker");
+
+  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_PLAYING),
+      GST_STATE_CHANGE_ASYNC);
+  fail_unless_equals_int (gst_element_get_state (pipeline, NULL, NULL, -1),
+      GST_STATE_CHANGE_SUCCESS);
+
+  g_object_get_property (G_OBJECT (tracker), "boxes", &get_gst_array);
+
+  /* Test if other boxes were discarded */
+  fail_unless_equals_int (gst_value_array_get_size (&get_gst_array), MAX_BOXES);
+
+  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_NULL),
+      GST_STATE_CHANGE_SUCCESS);
+
+  gst_object_unref (pipeline);
 }
 
 GST_END_TEST;
@@ -228,7 +251,7 @@ gst_vpi_klt_tracker_suite (void)
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray8);
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray_16);
   tcase_add_test (tc, test_fail_when_invalid_number_of_box_params);
-  tcase_add_test (tc, test_fail_when_more_than_64_box_provided);
+  tcase_add_test (tc, test_discard_when_more_than_64_box_provided);
   tcase_add_test (tc, test_redefine_to_more_boxes_on_the_fly);
   tcase_add_test (tc, test_redefine_to_less_boxes_on_the_fly);
   tcase_add_test (tc, test_redefine_and_discard_boxes_on_the_fly);

@@ -531,6 +531,14 @@ gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
         sizeof (identity));
 
     cur_box++;
+    /* Do this validation here in case more than 64 boxes were provided but
+       some were discarded due to invalid parameters, leaving a valid number of
+       boxes */
+    if (MAX_BOUNDING_BOX <= cur_box) {
+      GST_WARNING_OBJECT (self,
+          "Received 64 boxes. Extra boxes will be discarded.");
+      break;
+    }
   }
   ret = cur_box;
 out:
@@ -552,13 +560,6 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
 
   boxes = gst_value_array_get_size (gst_array);
   params = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));
-
-  if (MAX_BOUNDING_BOX < boxes) {
-    GST_ERROR_OBJECT (self,
-        "Maximum amount of bounding boxes is 64. Current number is %d, "
-        "received %d.", self->total_boxes, boxes);
-    goto out;
-  }
 
   /* Reset arrays before filling them again */
   memset (self->input_box_array, 0,

@@ -61,7 +61,7 @@ struct _GstVpiUndistort
 
 /* prototypes */
 static GstFlowReturn gst_vpi_undistort_transform_image (GstVpiFilter *
-    filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
+    filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
 static gboolean gst_vpi_undistort_start (GstVpiFilter * self, GstVideoInfo *
     in_info, GstVideoInfo * out_info);
 static gboolean gst_vpi_undistort_stop (GstBaseTransform * trans);
@@ -513,7 +513,7 @@ out:
 
 static GstFlowReturn
 gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
-    VPIImage in_image, VPIImage out_image)
+    VpiFrame * in_frame, VpiFrame * out_frame)
 {
   GstVpiUndistort *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
@@ -521,14 +521,15 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
-  g_return_val_if_fail (in_image, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
 
   self = GST_VPI_UNDISTORT (filter);
 
   GST_LOG_OBJECT (self, "Transform image");
 
-  status = vpiSubmitRemap (stream, self->warp, in_image, out_image,
+  status =
+      vpiSubmitRemap (stream, self->warp, in_frame->image, out_frame->image,
       self->interpolator, VPI_BOUNDARY_COND_ZERO);
 
   if (VPI_SUCCESS != status) {

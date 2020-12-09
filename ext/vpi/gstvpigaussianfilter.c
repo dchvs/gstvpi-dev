@@ -49,7 +49,7 @@ struct _GstVpiGaussianFilter
 static gboolean gst_vpi_gaussian_filter_start (GstVpiFilter * filter,
     GstVideoInfo * in_info, GstVideoInfo * out_info);
 static GstFlowReturn gst_vpi_gaussian_filter_transform_image (GstVpiFilter *
-    filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
+    filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
 static void gst_vpi_gaussian_filter_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_gaussian_filter_get_property (GObject * object,
@@ -249,7 +249,7 @@ gst_vpi_gaussian_filter_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
 static GstFlowReturn
 gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
-    VPIStream stream, VPIImage in_image, VPIImage out_image)
+    VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame)
 {
   GstVpiGaussianFilter *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
@@ -262,8 +262,8 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
-  g_return_val_if_fail (in_image, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
 
   self = GST_VPI_GAUSSIAN_FILTER (filter);
 
@@ -277,8 +277,8 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   boundary_cond = self->boundary_cond;
   GST_OBJECT_UNLOCK (self);
 
-  status = vpiSubmitGaussianFilter (stream, VPI_BACKEND_CUDA, in_image,
-      out_image, size_x, size_y, sigma_x, sigma_y, boundary_cond);
+  status = vpiSubmitGaussianFilter (stream, VPI_BACKEND_CUDA, in_frame->image,
+      out_frame->image, size_x, size_y, sigma_x, sigma_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;

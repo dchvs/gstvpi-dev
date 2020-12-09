@@ -34,6 +34,8 @@ struct _GstVpiFilterClass
                      *out_info);
   GstFlowReturn (*transform_image) (GstVpiFilter *self, VPIStream stream,
                                     VpiFrame *in_frame, VpiFrame *out_frame);
+  GstFlowReturn (*transform_image_ip) (GstVpiFilter *self, VPIStream stream,
+                                       VpiFrame *frame);
 };
 
 G_END_DECLS

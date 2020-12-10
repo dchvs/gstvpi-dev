@@ -56,9 +56,10 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define DEFAULT_PROP_NCC_THRESHOLD_UPDATE 0.8
 #define DEFAULT_PROP_SCALING_ITERATIONS 20
 
-struct _GstVpiKltTracker
+typedef struct _GstVpiKltTrackerPrivate GstVpiKltTrackerPrivate;
+
+struct _GstVpiKltTrackerPrivate
 {
-  GstVpiFilter parent;
   /* According to VPI requirements arrays must be of 128 */
   VPIKLTTrackedBoundingBox input_box_array[VPI_ARRAY_CAPACITY];
   VPIHomographyTransform2D input_trans_array[VPI_ARRAY_CAPACITY];
@@ -123,6 +124,8 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
   GstBaseTransformClass *base_transform_class =
       GST_BASE_TRANSFORM_CLASS (klass);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_CLASS (klass);
+
+  g_type_class_add_private (gobject_class, sizeof (GstVpiKltTrackerPrivate));
 
   gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
@@ -223,37 +226,46 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
 static void
 gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
 {
-  self->klt_params.numberOfIterationsScaling = DEFAULT_PROP_SCALING_ITERATIONS;
-  self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
-  self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
-  self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
-  self->klt_params.maxScaleChange = DEFAULT_PROP_MAX_SCALE_CHANGE;
-  self->klt_params.maxTranslationChange = DEFAULT_PROP_MAX_TRANSLATION_CHANGE;
-  self->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
+  GstVpiKltTrackerPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
-  self->draw_box = DEFAULT_PROP_DRAW_BOX;
-  self->wrapped_arrays = FALSE;
-  self->total_boxes = 0;
+  priv->klt_params.numberOfIterationsScaling = DEFAULT_PROP_SCALING_ITERATIONS;
+  priv->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
+  priv->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
+  priv->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
+  priv->klt_params.maxScaleChange = DEFAULT_PROP_MAX_SCALE_CHANGE;
+  priv->klt_params.maxTranslationChange = DEFAULT_PROP_MAX_TRANSLATION_CHANGE;
+  priv->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
+
+  priv->draw_box = DEFAULT_PROP_DRAW_BOX;
+  priv->wrapped_arrays = FALSE;
+  priv->total_boxes = 0;
 }
 
 static void
 gst_vpi_klt_tracker_validate_thresholds (GstVpiKltTracker * self)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
+  
   g_return_if_fail (self);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
   GST_OBJECT_LOCK (self);
 
   /* We must verify that kill <= update <= stop */
-  if ((self->klt_params.nccThresholdUpdate > self->klt_params.nccThresholdStop)
-      || (self->klt_params.nccThresholdKill >
-          self->klt_params.nccThresholdUpdate)) {
-    self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
-    self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
-    self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
-    GST_WARNING_OBJECT (self, "The relationship kill <= update <= stop was not"
+  if ((priv->klt_params.nccThresholdUpdate > priv->klt_params.nccThresholdStop)
+      || (priv->klt_params.nccThresholdKill >
+          priv->klt_params.nccThresholdUpdate)) {
+    priv->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
+    priv->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
+    priv->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
+    GST_WARNING_OBJECT (priv, "The relationship kill <= update <= stop was not"
         " respected. Using default values for all the thresholds. kill=%f "
-        "update=%f stop=%f.", self->klt_params.nccThresholdKill,
-        self->klt_params.nccThresholdUpdate, self->klt_params.nccThresholdStop);
+        "update=%f stop=%f.", priv->klt_params.nccThresholdKill,
+        priv->klt_params.nccThresholdUpdate, priv->klt_params.nccThresholdStop);
   }
   GST_OBJECT_UNLOCK (self);
 }
@@ -263,6 +275,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     GstVideoInfo * out_info)
 {
   GstVpiKltTracker *self = NULL;
+  GstVpiKltTrackerPrivate *priv = NULL;
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
   guint width = 0;
@@ -274,10 +287,12 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   g_return_val_if_fail (out_info, FALSE);
 
   self = GST_VPI_KLT_TRACKER (filter);
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
   GST_DEBUG_OBJECT (self, "start");
 
-  if (0 == self->total_boxes) {
+  if (0 == priv->total_boxes) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
         ("No valid bounding boxes provided."), (NULL));
     ret = FALSE;
@@ -285,16 +300,16 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   }
   gst_vpi_klt_tracker_validate_thresholds (self);
 
-  self->first_frame = TRUE;
-  self->template_frame.image = NULL;
-  self->template_frame.buffer = NULL;
+  priv->first_frame = TRUE;
+  priv->template_frame.image = NULL;
+  priv->template_frame.buffer = NULL;
 
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
   format = GST_VIDEO_INFO_FORMAT (in_info);
 
   status = vpiCreateKLTFeatureTracker (VPI_BACKEND_CUDA, width, height,
-      gst_vpi_video_to_image_format (format), &self->klt);
+      gst_vpi_video_to_image_format (format), &priv->klt);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -306,7 +321,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   status = vpiArrayCreate (VPI_ARRAY_CAPACITY,
       VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX, VPI_BACKEND_ALL,
-      &self->output_box_vpi_array);
+      &priv->output_box_vpi_array);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -318,7 +333,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   status = vpiArrayCreate (VPI_ARRAY_CAPACITY,
       VPI_ARRAY_TYPE_HOMOGRAPHY_TRANSFORM_2D, VPI_BACKEND_ALL,
-      &self->output_trans_vpi_array);
+      &priv->output_trans_vpi_array);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -331,12 +346,12 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   goto out;
 
 free_out_box_array:
-  vpiArrayDestroy (self->output_box_vpi_array);
-  self->output_box_vpi_array = NULL;
+  vpiArrayDestroy (priv->output_box_vpi_array);
+  priv->output_box_vpi_array = NULL;
 
 free_klt:
-  vpiPayloadDestroy (self->klt);
-  self->klt = NULL;
+  vpiPayloadDestroy (priv->klt);
+  priv->klt = NULL;
 
 out:
   return ret;
@@ -345,6 +360,7 @@ out:
 static void
 gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   VPIImageData vpi_image_data = { 0 };
   VPIArrayData box_data = { 0 };
   VPIArrayData trans_data = { 0 };
@@ -360,6 +376,9 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   g_return_if_fail (self);
   g_return_if_fail (image);
 
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
   GST_OBJECT_LOCK (self);
 
   vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
@@ -368,15 +387,15 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   format = vpi_image_data.type;
   image_data = (guint8 *) vpi_image_data.planes[0].data;
 
-  vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ, &box_data);
-  vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ, &trans_data);
+  vpiArrayLock (priv->input_box_vpi_array, VPI_LOCK_READ, &box_data);
+  vpiArrayLock (priv->input_trans_vpi_array, VPI_LOCK_READ, &trans_data);
   box = (VPIKLTTrackedBoundingBox *) box_data.data;
   trans = (VPIHomographyTransform2D *) trans_data.data;
 
   /* To address both types with same pointer */
   scale_f = (VPI_IMAGE_FORMAT_U8 == format) ? 1 : 2;
 
-  for (b = 0; b < self->total_boxes; b++) {
+  for (b = 0; b < priv->total_boxes; b++) {
     if (box[b].trackingStatus == VALID_TRACKING) {
       x = (guint) box[b].bbox.xform.mat3[0][2] + trans[b].mat3[0][2];
       y = (guint) box[b].bbox.xform.mat3[1][2] + trans[b].mat3[1][2];
@@ -406,8 +425,8 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   }
 
   vpiImageUnlock (image);
-  vpiArrayUnlock (self->input_box_vpi_array);
-  vpiArrayUnlock (self->input_trans_vpi_array);
+  vpiArrayUnlock (priv->input_box_vpi_array);
+  vpiArrayUnlock (priv->input_trans_vpi_array);
 
   GST_OBJECT_UNLOCK (self);
 }
@@ -415,6 +434,7 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
 static void
 gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   VPIArrayData updated_box_data = { 0 };
   VPIArrayData updated_trans_data = { 0 };
   VPIKLTTrackedBoundingBox *updated_box = NULL;
@@ -423,17 +443,20 @@ gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
 
   g_return_if_fail (self);
 
-  vpiArrayLock (self->output_box_vpi_array, VPI_LOCK_READ, &updated_box_data);
-  vpiArrayLock (self->output_trans_vpi_array, VPI_LOCK_READ,
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
+  vpiArrayLock (priv->output_box_vpi_array, VPI_LOCK_READ, &updated_box_data);
+  vpiArrayLock (priv->output_trans_vpi_array, VPI_LOCK_READ,
       &updated_trans_data);
   updated_box = (VPIKLTTrackedBoundingBox *) updated_box_data.data;
   updated_trans = (VPIHomographyTransform2D *) updated_trans_data.data;
 
   /* Set the input for next frame */
   GST_OBJECT_LOCK (self);
-  for (i = 0; i < self->total_boxes; i++) {
-    self->input_box_array[i].trackingStatus = updated_box[i].trackingStatus;
-    self->input_box_array[i].templateStatus = updated_box[i].templateStatus;
+  for (i = 0; i < priv->total_boxes; i++) {
+    priv->input_box_array[i].trackingStatus = updated_box[i].trackingStatus;
+    priv->input_box_array[i].templateStatus = updated_box[i].templateStatus;
 
     /* Skip boxes that are not being tracked */
     if (VALID_TRACKING != updated_box[i].trackingStatus) {
@@ -444,23 +467,24 @@ gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
       VPIHomographyTransform2D identity = { IDENTITY_TRANSFORM };
 
       /* Simple update approach */
-      self->input_box_array[i] = updated_box[i];
-      self->input_box_array[i].templateStatus = NEED_TEMPLATE_UPDATE;
-      self->input_trans_array[i] = identity;
+      priv->input_box_array[i] = updated_box[i];
+      priv->input_box_array[i].templateStatus = NEED_TEMPLATE_UPDATE;
+      priv->input_trans_array[i] = identity;
     } else {
-      self->input_box_array[i].templateStatus = !NEED_TEMPLATE_UPDATE;
-      self->input_trans_array[i] = updated_trans[i];
+      priv->input_box_array[i].templateStatus = !NEED_TEMPLATE_UPDATE;
+      priv->input_trans_array[i] = updated_trans[i];
     }
   }
   GST_OBJECT_UNLOCK (self);
-  vpiArrayUnlock (self->output_box_vpi_array);
-  vpiArrayUnlock (self->output_trans_vpi_array);
+  vpiArrayUnlock (priv->output_box_vpi_array);
+  vpiArrayUnlock (priv->output_trans_vpi_array);
 }
 
 static void
 gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
     VPIStream stream, VPIImage image)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   VPIStatus status = VPI_SUCCESS;
   gboolean draw_box = DEFAULT_PROP_DRAW_BOX;
 
@@ -468,13 +492,16 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
   g_return_if_fail (stream);
   g_return_if_fail (image);
 
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
   GST_OBJECT_LOCK (self);
-  draw_box = self->draw_box;
+  draw_box = priv->draw_box;
   status =
-      vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_frame.image,
-      self->input_box_vpi_array, self->input_trans_vpi_array, image,
-      self->output_box_vpi_array, self->output_trans_vpi_array,
-      &self->klt_params);
+      vpiSubmitKLTFeatureTracker (stream, priv->klt, priv->template_frame.image,
+      priv->input_box_vpi_array, priv->input_trans_vpi_array, image,
+      priv->output_box_vpi_array, priv->output_trans_vpi_array,
+      &priv->klt_params);
   vpiStreamSync (stream);
   GST_OBJECT_UNLOCK (self);
 
@@ -489,8 +516,8 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
 
   /* Force arrays to update because wrapped memory has been modifed */
   GST_OBJECT_LOCK (self);
-  vpiArrayInvalidate (self->input_box_vpi_array);
-  vpiArrayInvalidate (self->input_trans_vpi_array);
+  vpiArrayInvalidate (priv->input_box_vpi_array);
+  vpiArrayInvalidate (priv->input_trans_vpi_array);
   GST_OBJECT_UNLOCK (self);
 
   if (draw_box) {
@@ -506,6 +533,7 @@ gst_vpi_klt_tracker_transform_image_ip (GstVpiFilter * filter, VPIStream stream,
     VpiFrame * frame)
 {
   GstVpiKltTracker *self = NULL;
+  GstVpiKltTrackerPrivate *priv = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
@@ -514,22 +542,24 @@ gst_vpi_klt_tracker_transform_image_ip (GstVpiFilter * filter, VPIStream stream,
   g_return_val_if_fail (frame->image, GST_FLOW_ERROR);
 
   self = GST_VPI_KLT_TRACKER (filter);
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
   GST_LOG_OBJECT (self, "Transform image ip");
 
-  if (self->first_frame) {
+  if (priv->first_frame) {
     GST_DEBUG_OBJECT (self, "Setting first frame");
-    self->first_frame = FALSE;
+    priv->first_frame = FALSE;
 
   } else {
     gst_vpi_klt_tracker_track_bounding_boxes (self, stream, frame->image);
   }
 
-  if (self->template_frame.buffer) {
-    gst_buffer_unref (self->template_frame.buffer);
+  if (priv->template_frame.buffer) {
+    gst_buffer_unref (priv->template_frame.buffer);
   }
-  self->template_frame.buffer = gst_buffer_ref (frame->buffer);
-  self->template_frame.image = frame->image;
+  priv->template_frame.buffer = gst_buffer_ref (frame->buffer);
+  priv->template_frame.image = frame->image;
 
   return ret;
 }
@@ -552,17 +582,21 @@ gst_vpi_klt_tracker_wrap_vpi_array (GstVpiKltTracker * self,
 static VPIStatus
 gst_vpi_klt_tracker_set_vpi_arrays (GstVpiKltTracker * self, guint size)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   VPIArrayData array_data = { 0 };
   VPIStatus status = VPI_SUCCESS;
 
   g_return_val_if_fail (self, VPI_ERROR_INVALID_ARGUMENT);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
   array_data.capacity = VPI_ARRAY_CAPACITY;
   array_data.size = size;
 
   status =
       gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
-      self->input_box_array, &self->input_box_vpi_array,
+      priv->input_box_array, &priv->input_box_vpi_array,
       VPI_ARRAY_TYPE_KLT_TRACKED_BOUNDING_BOX);
 
   if (VPI_SUCCESS != status) {
@@ -573,7 +607,7 @@ gst_vpi_klt_tracker_set_vpi_arrays (GstVpiKltTracker * self, guint size)
 
   status =
       gst_vpi_klt_tracker_wrap_vpi_array (self, &array_data,
-      self->input_trans_array, &self->input_trans_vpi_array,
+      priv->input_trans_array, &priv->input_trans_vpi_array,
       VPI_ARRAY_TYPE_HOMOGRAPHY_TRANSFORM_2D);
 
   if (VPI_SUCCESS != status) {
@@ -585,8 +619,8 @@ gst_vpi_klt_tracker_set_vpi_arrays (GstVpiKltTracker * self, guint size)
   goto out;
 
 free_in_box_array:
-  vpiArrayDestroy (self->input_box_vpi_array);
-  self->input_box_vpi_array = NULL;
+  vpiArrayDestroy (priv->input_box_vpi_array);
+  priv->input_box_vpi_array = NULL;
 
 out:
   return status;
@@ -596,6 +630,7 @@ static guint
 gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
     const GValue * gst_array, guint boxes, guint params)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   const GValue *box = NULL;
   gint width = 0;
   gint height = 0;
@@ -606,6 +641,9 @@ gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
 
   g_return_val_if_fail (self, ret);
   g_return_val_if_fail (gst_array, ret);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
   for (i = 0; i < boxes; i++) {
     box = gst_value_array_get_value (gst_array, i);
@@ -629,17 +667,17 @@ gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
       continue;
     }
 
-    memcpy (&self->input_box_array[cur_box].bbox.xform.mat3, &identity,
+    memcpy (&priv->input_box_array[cur_box].bbox.xform.mat3, &identity,
         sizeof (identity));
-    self->input_box_array[cur_box].bbox.xform.mat3[0][2] =
+    priv->input_box_array[cur_box].bbox.xform.mat3[0][2] =
         g_value_get_int (gst_value_array_get_value (box, X_POS));
-    self->input_box_array[cur_box].bbox.xform.mat3[1][2] =
+    priv->input_box_array[cur_box].bbox.xform.mat3[1][2] =
         g_value_get_int (gst_value_array_get_value (box, Y_POS));
-    self->input_box_array[cur_box].bbox.width = width;
-    self->input_box_array[cur_box].bbox.height = height;
-    self->input_box_array[cur_box].trackingStatus = VALID_TRACKING;
-    self->input_box_array[cur_box].templateStatus = NEED_TEMPLATE_UPDATE;
-    memcpy (&self->input_trans_array[cur_box].mat3, &identity,
+    priv->input_box_array[cur_box].bbox.width = width;
+    priv->input_box_array[cur_box].bbox.height = height;
+    priv->input_box_array[cur_box].trackingStatus = VALID_TRACKING;
+    priv->input_box_array[cur_box].templateStatus = NEED_TEMPLATE_UPDATE;
+    memcpy (&priv->input_trans_array[cur_box].mat3, &identity,
         sizeof (identity));
 
     cur_box++;
@@ -661,6 +699,7 @@ static void
 gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
     const GValue * gst_array)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   guint boxes = 0;
   guint params = 0;
 
@@ -670,14 +709,17 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
   g_return_if_fail (self);
   g_return_if_fail (gst_array);
 
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
   boxes = gst_value_array_get_size (gst_array);
   params = gst_value_array_get_size (gst_value_array_get_value (gst_array, 0));
 
   /* Reset arrays before filling them again */
-  memset (self->input_box_array, 0,
-      self->total_boxes * sizeof (VPIKLTTrackedBoundingBox));
-  memset (self->input_trans_array, 0,
-      self->total_boxes * sizeof (VPIHomographyTransform2D));
+  memset (priv->input_box_array, 0,
+      priv->total_boxes * sizeof (VPIKLTTrackedBoundingBox));
+  memset (priv->input_trans_array, 0,
+      priv->total_boxes * sizeof (VPIHomographyTransform2D));
 
   cur_box =
       gst_vpi_klt_tracker_fill_bounding_boxes (self, gst_array, boxes, params);
@@ -687,29 +729,29 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
   }
 
   /* If the wrappers have not been created, do it with received boxes data */
-  if (!self->wrapped_arrays) {
+  if (!priv->wrapped_arrays) {
     status = gst_vpi_klt_tracker_set_vpi_arrays (self, cur_box);
     if (VPI_SUCCESS != status) {
       goto out;
     }
-    self->wrapped_arrays = TRUE;
+    priv->wrapped_arrays = TRUE;
     /* If the boxes are being redefined */
   } else {
 
     /* Update the VPI array size according to new boxes received */
-    if (cur_box != self->total_boxes) {
-      vpiArrayLock (self->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (self->input_box_vpi_array, cur_box);
-      vpiArrayUnlock (self->input_box_vpi_array);
-      vpiArrayLock (self->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (self->input_trans_vpi_array, cur_box);
-      vpiArrayUnlock (self->input_trans_vpi_array);
+    if (cur_box != priv->total_boxes) {
+      vpiArrayLock (priv->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+      vpiArraySetSize (priv->input_box_vpi_array, cur_box);
+      vpiArrayUnlock (priv->input_box_vpi_array);
+      vpiArrayLock (priv->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+      vpiArraySetSize (priv->input_trans_vpi_array, cur_box);
+      vpiArrayUnlock (priv->input_trans_vpi_array);
     }
 
-    vpiArrayInvalidate (self->input_box_vpi_array);
-    vpiArrayInvalidate (self->input_trans_vpi_array);
+    vpiArrayInvalidate (priv->input_box_vpi_array);
+    vpiArrayInvalidate (priv->input_trans_vpi_array);
   }
-  self->total_boxes = cur_box;
+  priv->total_boxes = cur_box;
 
 out:
   return;
@@ -719,6 +761,7 @@ static void
 gst_vpi_klt_tracker_get_bounding_boxes (GstVpiKltTracker * self,
     GValue * gst_array)
 {
+  GstVpiKltTrackerPrivate *priv = NULL;
   GValue box = G_VALUE_INIT;
   GValue value = G_VALUE_INIT;
   guint i = 0;
@@ -727,13 +770,16 @@ gst_vpi_klt_tracker_get_bounding_boxes (GstVpiKltTracker * self,
   g_return_if_fail (self);
   g_return_if_fail (gst_array);
 
-  for (i = 0; i < self->total_boxes; i++) {
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
+  for (i = 0; i < priv->total_boxes; i++) {
 
     guint params[NUM_BOX_PARAMS] = {
-      self->input_box_array[i].bbox.xform.mat3[0][2],
-      self->input_box_array[i].bbox.xform.mat3[1][2],
-      self->input_box_array[i].bbox.width,
-      self->input_box_array[i].bbox.height
+      priv->input_box_array[i].bbox.xform.mat3[0][2],
+      priv->input_box_array[i].bbox.xform.mat3[1][2],
+      priv->input_box_array[i].bbox.width,
+      priv->input_box_array[i].bbox.height
     };
     g_value_init (&box, GST_TYPE_ARRAY);
 
@@ -755,6 +801,8 @@ gst_vpi_klt_tracker_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
   GstVpiKltTracker *self = GST_VPI_KLT_TRACKER (object);
+  GstVpiKltTrackerPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
+      GST_TYPE_VPI_KLT_TRACKER, GstVpiKltTrackerPrivate);
 
   GST_DEBUG_OBJECT (self, "set_property");
 
@@ -766,25 +814,25 @@ gst_vpi_klt_tracker_set_property (GObject * object, guint property_id,
       gst_vpi_klt_tracker_set_bounding_boxes (self, value);
       break;
     case PROP_DRAW_BOX:
-      self->draw_box = g_value_get_boolean (value);
+      priv->draw_box = g_value_get_boolean (value);
       break;
     case PROP_MAX_SCALE_CHANGE:
-      self->klt_params.maxScaleChange = g_value_get_double (value);
+      priv->klt_params.maxScaleChange = g_value_get_double (value);
       break;
     case PROP_MAX_TRANSLATION_CHANGE:
-      self->klt_params.maxTranslationChange = g_value_get_double (value);
+      priv->klt_params.maxTranslationChange = g_value_get_double (value);
       break;
     case PROP_NCC_THRESHOLD_KILL:
-      self->klt_params.nccThresholdKill = g_value_get_double (value);
+      priv->klt_params.nccThresholdKill = g_value_get_double (value);
       break;
     case PROP_NCC_THRESHOLD_STOP:
-      self->klt_params.nccThresholdStop = g_value_get_double (value);
+      priv->klt_params.nccThresholdStop = g_value_get_double (value);
       break;
     case PROP_NCC_THRESHOLD_UPDATE:
-      self->klt_params.nccThresholdUpdate = g_value_get_double (value);
+      priv->klt_params.nccThresholdUpdate = g_value_get_double (value);
       break;
     case PROP_SCALING_ITERATIONS:
-      self->klt_params.numberOfIterationsScaling = g_value_get_int (value);
+      priv->klt_params.numberOfIterationsScaling = g_value_get_int (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -798,6 +846,8 @@ gst_vpi_klt_tracker_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
   GstVpiKltTracker *self = GST_VPI_KLT_TRACKER (object);
+  GstVpiKltTrackerPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
+      GST_TYPE_VPI_KLT_TRACKER, GstVpiKltTrackerPrivate);
 
   GST_DEBUG_OBJECT (self, "get_property");
 
@@ -809,25 +859,25 @@ gst_vpi_klt_tracker_get_property (GObject * object, guint property_id,
       gst_vpi_klt_tracker_get_bounding_boxes (self, value);
       break;
     case PROP_DRAW_BOX:
-      g_value_set_boolean (value, self->draw_box);
+      g_value_set_boolean (value, priv->draw_box);
       break;
     case PROP_MAX_SCALE_CHANGE:
-      g_value_set_double (value, self->klt_params.maxScaleChange);
+      g_value_set_double (value, priv->klt_params.maxScaleChange);
       break;
     case PROP_MAX_TRANSLATION_CHANGE:
-      g_value_set_double (value, self->klt_params.maxTranslationChange);
+      g_value_set_double (value, priv->klt_params.maxTranslationChange);
       break;
     case PROP_NCC_THRESHOLD_KILL:
-      g_value_set_double (value, self->klt_params.nccThresholdKill);
+      g_value_set_double (value, priv->klt_params.nccThresholdKill);
       break;
     case PROP_NCC_THRESHOLD_STOP:
-      g_value_set_double (value, self->klt_params.nccThresholdStop);
+      g_value_set_double (value, priv->klt_params.nccThresholdStop);
       break;
     case PROP_NCC_THRESHOLD_UPDATE:
-      g_value_set_double (value, self->klt_params.nccThresholdUpdate);
+      g_value_set_double (value, priv->klt_params.nccThresholdUpdate);
       break;
     case PROP_SCALING_ITERATIONS:
-      g_value_set_int (value, self->klt_params.numberOfIterationsScaling);
+      g_value_set_int (value, priv->klt_params.numberOfIterationsScaling);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -840,36 +890,39 @@ static gboolean
 gst_vpi_klt_tracker_stop (GstBaseTransform * trans)
 {
   GstVpiKltTracker *self = GST_VPI_KLT_TRACKER (trans);
+  GstVpiKltTrackerPrivate *priv = NULL;
   gboolean ret = TRUE;
 
   GST_BASE_TRANSFORM_CLASS (gst_vpi_klt_tracker_parent_class)->stop (trans);
 
   GST_DEBUG_OBJECT (self, "stop");
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
 
   GST_OBJECT_LOCK (self);
 
-  vpiArrayDestroy (self->input_trans_vpi_array);
-  self->input_trans_vpi_array = NULL;
+  vpiArrayDestroy (priv->input_trans_vpi_array);
+  priv->input_trans_vpi_array = NULL;
 
-  vpiArrayDestroy (self->input_box_vpi_array);
-  self->input_box_vpi_array = NULL;
+  vpiArrayDestroy (priv->input_box_vpi_array);
+  priv->input_box_vpi_array = NULL;
 
-  vpiPayloadDestroy (self->klt);
-  self->klt = NULL;
+  vpiPayloadDestroy (priv->klt);
+  priv->klt = NULL;
 
   GST_OBJECT_UNLOCK (self);
 
-  vpiArrayDestroy (self->output_trans_vpi_array);
-  self->output_trans_vpi_array = NULL;
+  vpiArrayDestroy (priv->output_trans_vpi_array);
+  priv->output_trans_vpi_array = NULL;
 
-  vpiArrayDestroy (self->output_box_vpi_array);
-  self->output_box_vpi_array = NULL;
+  vpiArrayDestroy (priv->output_box_vpi_array);
+  priv->output_box_vpi_array = NULL;
 
-  if (self->template_frame.buffer) {
-    gst_buffer_unref (self->template_frame.buffer);
+  if (priv->template_frame.buffer) {
+    gst_buffer_unref (priv->template_frame.buffer);
   }
-  self->template_frame.buffer = NULL;
-  self->template_frame.image = NULL;
+  priv->template_frame.buffer = NULL;
+  priv->template_frame.image = NULL;
 
   return ret;
 }

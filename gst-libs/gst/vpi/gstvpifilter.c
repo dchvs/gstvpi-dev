@@ -112,6 +112,10 @@ gst_vpi_filter_start (GstBaseTransform * trans)
     goto out;
   }
 
+  if (vpi_filter_class->transform_image_ip) {
+    gst_base_transform_set_in_place (trans, TRUE);
+  }
+
   cuda_status = cudaStreamCreate (&priv->cuda_stream);
   if (cudaSuccess != cuda_status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

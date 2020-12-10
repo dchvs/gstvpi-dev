@@ -79,8 +79,8 @@ struct _GstVpiKltTracker
 /* prototypes */
 static gboolean gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo
     * in_info, GstVideoInfo * out_info);
-static GstFlowReturn gst_vpi_klt_tracker_transform_image (GstVpiFilter *
-    filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
+static GstFlowReturn gst_vpi_klt_tracker_transform_image_ip (GstVpiFilter *
+    filter, VPIStream stream, VpiFrame * frame);
 static gboolean gst_vpi_klt_tracker_stop (GstBaseTransform * trans);
 static void gst_vpi_klt_tracker_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
@@ -137,8 +137,8 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
   vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_start);
-  vpi_filter_class->transform_image =
-      GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_transform_image);
+  vpi_filter_class->transform_image_ip =
+      GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_transform_image_ip);
   base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_stop);
   gobject_class->set_property = gst_vpi_klt_tracker_set_property;
   gobject_class->get_property = gst_vpi_klt_tracker_get_property;
@@ -459,21 +459,20 @@ gst_vpi_klt_tracker_update_bounding_boxes_status (GstVpiKltTracker * self)
 
 static void
 gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
-    VPIStream stream, VPIImage in_image, VPIImage out_image)
+    VPIStream stream, VPIImage image)
 {
   VPIStatus status = VPI_SUCCESS;
   gboolean draw_box = DEFAULT_PROP_DRAW_BOX;
 
   g_return_if_fail (self);
   g_return_if_fail (stream);
-  g_return_if_fail (in_image);
-  g_return_if_fail (out_image);
+  g_return_if_fail (image);
 
   GST_OBJECT_LOCK (self);
   draw_box = self->draw_box;
   status =
       vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_frame.image,
-      self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
+      self->input_box_vpi_array, self->input_trans_vpi_array, image,
       self->output_box_vpi_array, self->output_trans_vpi_array,
       &self->klt_params);
   vpiStreamSync (stream);
@@ -495,7 +494,7 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
   GST_OBJECT_UNLOCK (self);
 
   if (draw_box) {
-    gst_vpi_klt_tracker_draw_box_data (self, out_image);
+    gst_vpi_klt_tracker_draw_box_data (self, image);
   }
 
 out:
@@ -503,48 +502,34 @@ out:
 }
 
 static GstFlowReturn
-gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
-    VpiFrame * in_frame, VpiFrame * out_frame)
+gst_vpi_klt_tracker_transform_image_ip (GstVpiFilter * filter, VPIStream stream,
+    VpiFrame * frame)
 {
   GstVpiKltTracker *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  VPIImageData vpi_in_image_data = { 0 };
-  VPIImageData vpi_out_image_data = { 0 };
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
-  g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
-  g_return_val_if_fail (in_frame->image, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_frame->image, GST_FLOW_ERROR);
+  g_return_val_if_fail (frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (frame->image, GST_FLOW_ERROR);
 
   self = GST_VPI_KLT_TRACKER (filter);
 
-  GST_LOG_OBJECT (self, "Transform image");
-
-  /* Copy input image to output image */
-  vpiImageLock (in_frame->image, VPI_LOCK_READ, &vpi_in_image_data);
-  vpiImageLock (out_frame->image, VPI_LOCK_READ_WRITE, &vpi_out_image_data);
-  memcpy (vpi_out_image_data.planes[0].data,
-      vpi_in_image_data.planes[0].data, vpi_out_image_data.planes[0].height *
-      vpi_out_image_data.planes[0].pitchBytes);
-  vpiImageUnlock (in_frame->image);
-  vpiImageUnlock (out_frame->image);
+  GST_LOG_OBJECT (self, "Transform image ip");
 
   if (self->first_frame) {
     GST_DEBUG_OBJECT (self, "Setting first frame");
     self->first_frame = FALSE;
 
   } else {
-    gst_vpi_klt_tracker_track_bounding_boxes (self, stream, in_frame->image,
-        out_frame->image);
+    gst_vpi_klt_tracker_track_bounding_boxes (self, stream, frame->image);
   }
 
   if (self->template_frame.buffer) {
     gst_buffer_unref (self->template_frame.buffer);
   }
-  self->template_frame.buffer = gst_buffer_ref (in_frame->buffer);
-  self->template_frame.image = in_frame->image;
+  self->template_frame.buffer = gst_buffer_ref (frame->buffer);
+  self->template_frame.image = frame->image;
 
   return ret;
 }

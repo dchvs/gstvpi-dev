@@ -626,24 +626,78 @@ out:
   return status;
 }
 
+static VPIStatus
+gst_vpi_klt_tracker_update_vpi_arrays (GstVpiKltTracker * self, gint boxes)
+{
+  GstVpiKltTrackerPrivate *priv = NULL;
+  VPIStatus ret = VPI_SUCCESS;
+
+  g_return_val_if_fail (self, VPI_ERROR_INVALID_ARGUMENT);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
+  /* If the wrappers have not been created, do it with new boxes data */
+  if (!priv->wrapped_arrays) {
+    ret = gst_vpi_klt_tracker_set_vpi_arrays (self, boxes);
+    if (VPI_SUCCESS != ret) {
+      goto out;
+    }
+    priv->wrapped_arrays = TRUE;
+  } else {
+    /* Update the VPI array size according to new boxes received */
+    if (boxes != priv->total_boxes) {
+      vpiArrayLock (priv->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+      vpiArraySetSize (priv->input_box_vpi_array, boxes);
+      vpiArrayUnlock (priv->input_box_vpi_array);
+      vpiArrayLock (priv->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
+      vpiArraySetSize (priv->input_trans_vpi_array, boxes);
+      vpiArrayUnlock (priv->input_trans_vpi_array);
+    }
+
+    vpiArrayInvalidate (priv->input_box_vpi_array);
+    vpiArrayInvalidate (priv->input_trans_vpi_array);
+  }
+out:
+  return ret;
+}
+
+static void
+gst_vpi_klt_tracker_set_box_at (GstVpiKltTracker * self, gint index, gint x,
+    gint y, gint width, gint height)
+{
+  GstVpiKltTrackerPrivate *priv = NULL;
+  float identity[3][3] = IDENTITY_TRANSFORM;
+
+  g_return_if_fail (self);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
+  memcpy (&priv->input_box_array[index].bbox.xform.mat3, &identity,
+      sizeof (identity));
+  priv->input_box_array[index].bbox.xform.mat3[0][2] = x;
+  priv->input_box_array[index].bbox.xform.mat3[1][2] = y;
+  priv->input_box_array[index].bbox.width = width;
+  priv->input_box_array[index].bbox.height = height;
+  priv->input_box_array[index].trackingStatus = VALID_TRACKING;
+  priv->input_box_array[index].templateStatus = NEED_TEMPLATE_UPDATE;
+  memcpy (&priv->input_trans_array[index].mat3, &identity, sizeof (identity));
+}
+
 static guint
 gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
     const GValue * gst_array, guint boxes, guint params)
 {
-  GstVpiKltTrackerPrivate *priv = NULL;
   const GValue *box = NULL;
   gint width = 0;
   gint height = 0;
   guint i = 0;
   guint ret = 0;
   guint cur_box = 0;
-  float identity[3][3] = IDENTITY_TRANSFORM;
 
   g_return_val_if_fail (self, ret);
   g_return_val_if_fail (gst_array, ret);
-
-  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
-      GstVpiKltTrackerPrivate);
 
   for (i = 0; i < boxes; i++) {
     box = gst_value_array_get_value (gst_array, i);
@@ -666,21 +720,12 @@ gst_vpi_klt_tracker_fill_bounding_boxes (GstVpiKltTracker * self,
           "bounding box %d.", width, height, i);
       continue;
     }
-
-    memcpy (&priv->input_box_array[cur_box].bbox.xform.mat3, &identity,
-        sizeof (identity));
-    priv->input_box_array[cur_box].bbox.xform.mat3[0][2] =
-        g_value_get_int (gst_value_array_get_value (box, X_POS));
-    priv->input_box_array[cur_box].bbox.xform.mat3[1][2] =
-        g_value_get_int (gst_value_array_get_value (box, Y_POS));
-    priv->input_box_array[cur_box].bbox.width = width;
-    priv->input_box_array[cur_box].bbox.height = height;
-    priv->input_box_array[cur_box].trackingStatus = VALID_TRACKING;
-    priv->input_box_array[cur_box].templateStatus = NEED_TEMPLATE_UPDATE;
-    memcpy (&priv->input_trans_array[cur_box].mat3, &identity,
-        sizeof (identity));
-
+    gst_vpi_klt_tracker_set_box_at (self, cur_box,
+        g_value_get_int (gst_value_array_get_value (box, X_POS)),
+        g_value_get_int (gst_value_array_get_value (box, Y_POS)), width,
+        height);
     cur_box++;
+
     /* Do this validation here in case more than 64 boxes were provided but
        some were discarded due to invalid parameters, leaving a valid number of
        boxes */
@@ -720,6 +765,7 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
       priv->total_boxes * sizeof (VPIKLTTrackedBoundingBox));
   memset (priv->input_trans_array, 0,
       priv->total_boxes * sizeof (VPIHomographyTransform2D));
+  priv->total_boxes = 0;
 
   cur_box =
       gst_vpi_klt_tracker_fill_bounding_boxes (self, gst_array, boxes, params);
@@ -728,29 +774,11 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
     goto out;
   }
 
-  /* If the wrappers have not been created, do it with received boxes data */
-  if (!priv->wrapped_arrays) {
-    status = gst_vpi_klt_tracker_set_vpi_arrays (self, cur_box);
-    if (VPI_SUCCESS != status) {
-      goto out;
-    }
-    priv->wrapped_arrays = TRUE;
-    /* If the boxes are being redefined */
-  } else {
-
-    /* Update the VPI array size according to new boxes received */
-    if (cur_box != priv->total_boxes) {
-      vpiArrayLock (priv->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (priv->input_box_vpi_array, cur_box);
-      vpiArrayUnlock (priv->input_box_vpi_array);
-      vpiArrayLock (priv->input_trans_vpi_array, VPI_LOCK_READ_WRITE, NULL);
-      vpiArraySetSize (priv->input_trans_vpi_array, cur_box);
-      vpiArrayUnlock (priv->input_trans_vpi_array);
-    }
-
-    vpiArrayInvalidate (priv->input_box_vpi_array);
-    vpiArrayInvalidate (priv->input_trans_vpi_array);
+  status = gst_vpi_klt_tracker_update_vpi_arrays (self, cur_box);
+  if (VPI_SUCCESS != status) {
+    goto out;
   }
+
   priv->total_boxes = cur_box;
 
 out:

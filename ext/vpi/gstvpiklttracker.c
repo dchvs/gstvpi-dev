@@ -80,6 +80,8 @@ struct _GstVpiKltTrackerPrivate
 /* prototypes */
 static gboolean gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo
     * in_info, GstVideoInfo * out_info);
+static void gst_vpi_klt_tracker_append_new_box (GstVpiKltTracker * self,
+    gint x, gint y, gint width, gint height);
 static GstFlowReturn gst_vpi_klt_tracker_transform_image_ip (GstVpiFilter *
     filter, VPIStream stream, VpiFrame * frame);
 static gboolean gst_vpi_klt_tracker_stop (GstBaseTransform * trans);
@@ -139,6 +141,8 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
       "VPI based KLT feature tracker.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
+  klass->append_new_box =
+      GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_append_new_box);
   vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_start);
   vpi_filter_class->transform_image_ip =
       GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_transform_image_ip);
@@ -146,6 +150,12 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
   gobject_class->set_property = gst_vpi_klt_tracker_set_property;
   gobject_class->get_property = gst_vpi_klt_tracker_get_property;
   gobject_class->finalize = gst_vpi_klt_tracker_finalize;
+
+  g_signal_new ("new-box", G_TYPE_FROM_CLASS (klass),
+      G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
+      G_STRUCT_OFFSET (GstVpiKltTrackerClass, append_new_box), NULL, NULL,
+      g_cclosure_marshal_generic, G_TYPE_NONE, NUM_BOX_PARAMS, G_TYPE_INT,
+      G_TYPE_INT, G_TYPE_INT, G_TYPE_INT);
 
   g_object_class_install_property (gobject_class, PROP_BOX,
       gst_param_spec_array ("boxes",
@@ -780,6 +790,41 @@ gst_vpi_klt_tracker_set_bounding_boxes (GstVpiKltTracker * self,
   }
 
   priv->total_boxes = cur_box;
+
+out:
+  return;
+}
+
+static void
+gst_vpi_klt_tracker_append_new_box (GstVpiKltTracker * self, gint x, gint y,
+    gint width, gint height)
+{
+  GstVpiKltTrackerPrivate *priv = NULL;
+
+  g_return_if_fail (self);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
+      GstVpiKltTrackerPrivate);
+
+  GST_DEBUG_OBJECT (self, "Received new box");
+
+  if (MIN_BOUNDING_BOX_SIZE > width || MAX_BOUNDING_BOX_SIZE < width
+      || MIN_BOUNDING_BOX_SIZE > height || MAX_BOUNDING_BOX_SIZE < height) {
+    GST_WARNING_OBJECT (self,
+        "Size must be between 4x4 and 64x64. Received %dx%d. Refused append.",
+        width, height);
+    goto out;
+  }
+
+  if (priv->total_boxes >= MAX_BOUNDING_BOX) {
+    GST_WARNING_OBJECT (self,
+        "Maximum number of boxes reached. Refused append.");
+    goto out;
+  }
+
+  gst_vpi_klt_tracker_set_box_at (self, priv->total_boxes, x, y, width, height);
+  priv->total_boxes++;
+  gst_vpi_klt_tracker_update_vpi_arrays (self, priv->total_boxes);
 
 out:
   return;

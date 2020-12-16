@@ -17,8 +17,8 @@
 #include "gstvpiklttracker.h"
 
 #include <gst/gst.h>
-#include <vpi/Array.h>
 #include <vpi/algo/KLTFeatureTracker.h>
+#include <vpi/Array.h>
 
 #include "gst-libs/gst/vpi/gstvpi.h"
 
@@ -111,7 +111,7 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
 
   gst_element_class_set_static_metadata (GST_ELEMENT_CLASS (klass),
       "VPI KLT Tacker", "Filter/Video",
-      "VPI based KLT feature tracker element.",
+      "VPI based KLT feature tracker.",
       "Jimena Salas <jimena.salas@ridgerun.com>");
 
   vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_klt_tracker_start);
@@ -193,7 +193,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not create KLT tracker payload."), ("Code error: %s",
+        ("Could not create KLT tracker payload."), ("%s",
             vpiStatusGetName (status)));
     ret = FALSE;
     goto out;
@@ -205,7 +205,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not create output bounding box array."), ("Code error: %s",
+        ("Could not create output bounding box array."), ("%s",
             vpiStatusGetName (status)));
     ret = FALSE;
     goto free_klt;
@@ -217,7 +217,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not create output homographies array."), ("Code error: %s",
+        ("Could not create output homographies array."), ("%s",
             vpiStatusGetName (status)));
     ret = FALSE;
     goto free_out_box_array;
@@ -362,7 +362,7 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("Could not predict the new bounding boxes."), ("Code error: %s",
+        ("Could not predict the new bounding boxes."), ("%s",
             vpiStatusGetName (status)));
     goto out;
   }

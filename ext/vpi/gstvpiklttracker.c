@@ -42,7 +42,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define DEFAULT_PROP_BOX_MAX G_MAXINT
 #define DEFAULT_PROP_MAX_CHANGE_MIN 0
 #define DEFAULT_PROP_MAX_CHANGE_MAX G_MAXDOUBLE
-#define DEFAULT_PROP_NCC_THRESHOLD_MIN 0
+#define DEFAULT_PROP_NCC_THRESHOLD_MIN 0.0001
 #define DEFAULT_PROP_NCC_THRESHOLD_MAX 1
 
 #define DEFAULT_PROP_BOX 0
@@ -224,6 +224,35 @@ gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
   self->total_boxes = 0;
 }
 
+static void
+gst_vpi_klt_tracker_validate_thresholds (GstVpiKltTracker * self)
+{
+  g_return_if_fail (self);
+
+  GST_OBJECT_LOCK (self);
+
+  /* We must verify that kill <= update <= stop */
+  if (self->klt_params.nccThresholdUpdate > self->klt_params.nccThresholdStop) {
+    goto error;
+  }
+  if (self->klt_params.nccThresholdKill > self->klt_params.nccThresholdUpdate) {
+    goto error;
+  }
+  goto out;
+
+error:
+  self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
+  self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
+  self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
+  GST_WARNING_OBJECT (self, "The relationship kill <= update <= stop was not "
+      "respected. Using default values for all the thresholds. kill=%f update="
+      "%f stop=%f.", self->klt_params.nccThresholdKill,
+      self->klt_params.nccThresholdUpdate, self->klt_params.nccThresholdStop);
+out:
+  GST_OBJECT_UNLOCK (self);
+  return;
+}
+
 static gboolean
 gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     GstVideoInfo * out_info)
@@ -249,6 +278,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     ret = FALSE;
     goto out;
   }
+  gst_vpi_klt_tracker_validate_thresholds (self);
 
   self->first_frame = TRUE;
   self->template_image = NULL;

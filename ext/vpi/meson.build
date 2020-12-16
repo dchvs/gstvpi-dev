@@ -3,6 +3,7 @@ gst_plugin_sources = [
   'gstvpi.c',
   'gstvpidownload.c',
   'gstvpigaussianfilter.c',
+  'gstvpiklttracker.c',
   'gstvpiundistort.c',
   'gstvpiupload.c'
 ]
@@ -10,6 +11,7 @@ gst_plugin_sources = [
 gst_plugin_headers = [
   'gstvpidownload.h',
   'gstvpigaussianfilter.h',
+  'gstvpiklttracker.h',
   'gstvpiundistort.h',
   'gstvpiupload.h'
 ]

@@ -4,6 +4,7 @@ valgrind_dep = dependency('valgrind', required: false).partial_dependency(compil
 gst_tests = [
   ['elements/vpidownload', false, [],  [] ],
   ['elements/vpigaussianfilter', false, [],  [] ],
+  ['elements/vpiklttracker', false, [],  [] ],
   ['elements/vpiundistort', false, [],  [] ],
   ['elements/vpiupload', false, [],  [] ],
   ['libs/vpifilter', false, [],  [] ]

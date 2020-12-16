@@ -25,7 +25,7 @@ enum
 
 GST_START_TEST (test_playing_to_null_multiple_times)
 {
-  states_change (test_pipes[TEST_PLAYING_TO_NULL_MULTIPLE_TIMES]);
+  test_states_change (test_pipes[TEST_PLAYING_TO_NULL_MULTIPLE_TIMES]);
 }
 
 GST_END_TEST;

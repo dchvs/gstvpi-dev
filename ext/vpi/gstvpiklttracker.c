@@ -44,6 +44,8 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define DEFAULT_PROP_MAX_CHANGE_MAX G_MAXDOUBLE
 #define DEFAULT_PROP_NCC_THRESHOLD_MIN 0.0001
 #define DEFAULT_PROP_NCC_THRESHOLD_MAX 1
+#define DEFAULT_PROP_SCALING_ITERATIONS_MIN 0
+#define DEFAULT_PROP_SCALING_ITERATIONS_MAX G_MAXINT
 
 #define DEFAULT_PROP_BOX 0
 #define DEFAULT_PROP_DRAW_BOX TRUE
@@ -52,6 +54,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define DEFAULT_PROP_NCC_THRESHOLD_KILL 0.6
 #define DEFAULT_PROP_NCC_THRESHOLD_STOP 1.0
 #define DEFAULT_PROP_NCC_THRESHOLD_UPDATE 0.8
+#define DEFAULT_PROP_SCALING_ITERATIONS 20
 
 struct _GstVpiKltTracker
 {
@@ -94,7 +97,8 @@ enum
   PROP_MAX_TRANSLATION_CHANGE,
   PROP_NCC_THRESHOLD_KILL,
   PROP_NCC_THRESHOLD_STOP,
-  PROP_NCC_THRESHOLD_UPDATE
+  PROP_NCC_THRESHOLD_UPDATE,
+  PROP_SCALING_ITERATIONS
 };
 
 enum
@@ -206,12 +210,20 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
           DEFAULT_PROP_NCC_THRESHOLD_MAX,
           DEFAULT_PROP_NCC_THRESHOLD_UPDATE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SCALING_ITERATIONS,
+      g_param_spec_int ("scaling-iterations",
+          "Number of iterations for scaling",
+          "Number of inverse compositional iterations of scale estimations.",
+          DEFAULT_PROP_SCALING_ITERATIONS_MIN,
+          DEFAULT_PROP_SCALING_ITERATIONS_MAX, DEFAULT_PROP_SCALING_ITERATIONS,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
 {
-  self->klt_params.numberOfIterationsScaling = 20;
+  self->klt_params.numberOfIterationsScaling = DEFAULT_PROP_SCALING_ITERATIONS;
   self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
   self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
   self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
@@ -786,6 +798,9 @@ gst_vpi_klt_tracker_set_property (GObject * object, guint property_id,
     case PROP_NCC_THRESHOLD_UPDATE:
       self->klt_params.nccThresholdUpdate = g_value_get_double (value);
       break;
+    case PROP_SCALING_ITERATIONS:
+      self->klt_params.numberOfIterationsScaling = g_value_get_int (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -825,6 +840,9 @@ gst_vpi_klt_tracker_get_property (GObject * object, guint property_id,
       break;
     case PROP_NCC_THRESHOLD_UPDATE:
       g_value_set_double (value, self->klt_params.nccThresholdUpdate);
+      break;
+    case PROP_SCALING_ITERATIONS:
+      g_value_set_int (value, self->klt_params.numberOfIterationsScaling);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

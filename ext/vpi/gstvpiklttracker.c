@@ -76,8 +76,9 @@ struct _GstVpiKltTrackerPrivate
   guint box_count;
   guint total_boxes;
 };
-
 /* prototypes */
+static VPIStatus gst_vpi_klt_tracker_set_vpi_arrays (GstVpiKltTracker * self,
+    guint size);
 static gboolean gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo
     * in_info, GstVideoInfo * out_info);
 static void gst_vpi_klt_tracker_append_new_box (GstVpiKltTracker * self,
@@ -302,11 +303,9 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   GST_DEBUG_OBJECT (self, "start");
 
-  if (0 == priv->total_boxes) {
-    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("No valid bounding boxes provided."), (NULL));
-    ret = FALSE;
-    goto out;
+  /* If no boxes were provided initialize the vpi arrays with size 0 */
+  if (!priv->wrapped_arrays) {
+    gst_vpi_klt_tracker_set_vpi_arrays (self, 0);
   }
   gst_vpi_klt_tracker_validate_thresholds (self);
 

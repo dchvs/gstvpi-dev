@@ -40,9 +40,18 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 
 #define DEFAULT_PROP_BOX_MIN 0
 #define DEFAULT_PROP_BOX_MAX G_MAXINT
+#define DEFAULT_PROP_MAX_CHANGE_MIN 0
+#define DEFAULT_PROP_MAX_CHANGE_MAX G_MAXDOUBLE
+#define DEFAULT_PROP_NCC_THRESHOLD_MIN 0
+#define DEFAULT_PROP_NCC_THRESHOLD_MAX 1
 
 #define DEFAULT_PROP_BOX 0
 #define DEFAULT_PROP_DRAW_BOX TRUE
+#define DEFAULT_PROP_MAX_SCALE_CHANGE 0.2
+#define DEFAULT_PROP_MAX_TRANSLATION_CHANGE 1.5
+#define DEFAULT_PROP_NCC_THRESHOLD_KILL 0.6
+#define DEFAULT_PROP_NCC_THRESHOLD_STOP 1.0
+#define DEFAULT_PROP_NCC_THRESHOLD_UPDATE 0.8
 
 struct _GstVpiKltTracker
 {
@@ -80,7 +89,12 @@ enum
 {
   PROP_0,
   PROP_BOX,
-  PROP_DRAW_BOX
+  PROP_DRAW_BOX,
+  PROP_MAX_SCALE_CHANGE,
+  PROP_MAX_TRANSLATION_CHANGE,
+  PROP_NCC_THRESHOLD_KILL,
+  PROP_NCC_THRESHOLD_STOP,
+  PROP_NCC_THRESHOLD_UPDATE
 };
 
 enum
@@ -147,18 +161,62 @@ gst_vpi_klt_tracker_class_init (GstVpiKltTrackerClass * klass)
           "Draw bounding boxes of the tracker predictions.",
           DEFAULT_PROP_DRAW_BOX,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_MAX_SCALE_CHANGE,
+      g_param_spec_double ("max-scale", "Maximum relative scale change",
+          "Scale changes larger that this will make KLT consider that tracking"
+          " was lost. Must be positive.",
+          DEFAULT_PROP_MAX_CHANGE_MIN, DEFAULT_PROP_MAX_CHANGE_MAX,
+          DEFAULT_PROP_MAX_SCALE_CHANGE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_MAX_TRANSLATION_CHANGE,
+      g_param_spec_double ("max-trans", "Maximum relative translation change",
+          "Translation changes larger that this will make KLT consider that "
+          "tracking was lost. Must be positive.",
+          DEFAULT_PROP_MAX_CHANGE_MIN,
+          DEFAULT_PROP_MAX_CHANGE_MAX,
+          DEFAULT_PROP_MAX_TRANSLATION_CHANGE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_NCC_THRESHOLD_KILL,
+      g_param_spec_double ("threshold-kill", "Threshold to kill tracking",
+          "Threshold to consider template tracking was lost. Must be a value "
+          "between 0 and 1 but the relationship between the other thresholds "
+          "must be the following: 0 < kill <= update <= stop <= 1.",
+          DEFAULT_PROP_NCC_THRESHOLD_MIN,
+          DEFAULT_PROP_NCC_THRESHOLD_MAX, DEFAULT_PROP_NCC_THRESHOLD_KILL,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_NCC_THRESHOLD_STOP,
+      g_param_spec_double ("threshold-stop", "Threshold to stop iteration",
+          "Threshold to stop estimating.  Must be a value between 0 and 1 but "
+          "the relationship between the other thresholds must be the following"
+          ": 0 < kill <= update <= stop <= 1.",
+          DEFAULT_PROP_NCC_THRESHOLD_MIN,
+          DEFAULT_PROP_NCC_THRESHOLD_MAX, DEFAULT_PROP_NCC_THRESHOLD_STOP,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_NCC_THRESHOLD_UPDATE,
+      g_param_spec_double ("threshold-update", "Threshold to update template",
+          "Threshold for requiring template update. Must be a value between 0 "
+          "and 1 but the relationship between the other thresholds must be the"
+          " following: 0 < kill <= update <= stop <= 1.",
+          DEFAULT_PROP_NCC_THRESHOLD_MIN,
+          DEFAULT_PROP_NCC_THRESHOLD_MAX,
+          DEFAULT_PROP_NCC_THRESHOLD_UPDATE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_klt_tracker_init (GstVpiKltTracker * self)
 {
-  /* TODO: Expose these as properties */
   self->klt_params.numberOfIterationsScaling = 20;
-  self->klt_params.nccThresholdUpdate = 0.8;
-  self->klt_params.nccThresholdKill = 0.6;
-  self->klt_params.nccThresholdStop = 1.0;
-  self->klt_params.maxScaleChange = 0.2;
-  self->klt_params.maxTranslationChange = 1.5;
+  self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
+  self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
+  self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
+  self->klt_params.maxScaleChange = DEFAULT_PROP_MAX_SCALE_CHANGE;
+  self->klt_params.maxTranslationChange = DEFAULT_PROP_MAX_TRANSLATION_CHANGE;
   self->klt_params.trackingType = VPI_KLT_INVERSE_COMPOSITIONAL;
 
   self->draw_box = DEFAULT_PROP_DRAW_BOX;
@@ -683,6 +741,21 @@ gst_vpi_klt_tracker_set_property (GObject * object, guint property_id,
     case PROP_DRAW_BOX:
       self->draw_box = g_value_get_boolean (value);
       break;
+    case PROP_MAX_SCALE_CHANGE:
+      self->klt_params.maxScaleChange = g_value_get_double (value);
+      break;
+    case PROP_MAX_TRANSLATION_CHANGE:
+      self->klt_params.maxTranslationChange = g_value_get_double (value);
+      break;
+    case PROP_NCC_THRESHOLD_KILL:
+      self->klt_params.nccThresholdKill = g_value_get_double (value);
+      break;
+    case PROP_NCC_THRESHOLD_STOP:
+      self->klt_params.nccThresholdStop = g_value_get_double (value);
+      break;
+    case PROP_NCC_THRESHOLD_UPDATE:
+      self->klt_params.nccThresholdUpdate = g_value_get_double (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -707,6 +780,21 @@ gst_vpi_klt_tracker_get_property (GObject * object, guint property_id,
       break;
     case PROP_DRAW_BOX:
       g_value_set_boolean (value, self->draw_box);
+      break;
+    case PROP_MAX_SCALE_CHANGE:
+      g_value_set_double (value, self->klt_params.maxScaleChange);
+      break;
+    case PROP_MAX_TRANSLATION_CHANGE:
+      g_value_set_double (value, self->klt_params.maxTranslationChange);
+      break;
+    case PROP_NCC_THRESHOLD_KILL:
+      g_value_set_double (value, self->klt_params.nccThresholdKill);
+      break;
+    case PROP_NCC_THRESHOLD_STOP:
+      g_value_set_double (value, self->klt_params.nccThresholdStop);
+      break;
+    case PROP_NCC_THRESHOLD_UPDATE:
+      g_value_set_double (value, self->klt_params.nccThresholdUpdate);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

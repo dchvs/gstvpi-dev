@@ -35,6 +35,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_klt_tracker_debug_category);
 #define VALID_TRACKING 0
 #define NUM_BOX_PARAMS 4
 #define WHITE 255
+#define BOX_BORDER_WIDTH 3
 #define IDENTITY_TRANSFORM { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} }
 
 #define DEFAULT_PROP_BOX_MIN 0
@@ -249,8 +250,8 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
   guint stride = 0;
   VPIImageFormat format = 0;
   guint scale_f = 0;
-  guint b, i, j = 0;
-  float x, y, h, w = 0;
+  guint b, i, j, i_aux, j_aux = 0;
+  guint x, y, h, w = 0;
 
   g_return_if_fail (self);
   g_return_if_fail (image);
@@ -273,16 +274,28 @@ gst_vpi_klt_tracker_draw_box_data (GstVpiKltTracker * self, VPIImage image)
 
   for (b = 0; b < self->total_boxes; b++) {
     if (box[b].trackingStatus == VALID_TRACKING) {
-      x = box[b].bbox.xform.mat3[0][2] + trans[b].mat3[0][2];
-      y = box[b].bbox.xform.mat3[1][2] + trans[b].mat3[1][2];
-      w = box[b].bbox.width * box[b].bbox.xform.mat3[0][0] *
+      x = (guint) box[b].bbox.xform.mat3[0][2] + trans[b].mat3[0][2];
+      y = (guint) box[b].bbox.xform.mat3[1][2] + trans[b].mat3[1][2];
+      w = (guint) box[b].bbox.width * box[b].bbox.xform.mat3[0][0] *
           trans[b].mat3[0][0];
-      h = box[b].bbox.height * box[b].bbox.xform.mat3[1][1] *
+      h = (guint) box[b].bbox.height * box[b].bbox.xform.mat3[1][1] *
           trans[b].mat3[1][1];
 
-      for (i = y; i < y + h; i++) {
+      /* Top and bottom borders */
+      for (i = y; i < y + BOX_BORDER_WIDTH; i++) {
         for (j = scale_f * x; j < scale_f * (x + w); j++) {
           image_data[i * stride + j] = WHITE;
+          i_aux = i + h - BOX_BORDER_WIDTH - 1;
+          image_data[i_aux * stride + j] = WHITE;
+        }
+      }
+      /* Left and right borders (do not include corners that were already
+         covered by previous for) */
+      for (i = y + BOX_BORDER_WIDTH; i < y + h - BOX_BORDER_WIDTH; i++) {
+        for (j = scale_f * x; j < scale_f * (x + BOX_BORDER_WIDTH); j++) {
+          image_data[i * stride + j] = WHITE;
+          j_aux = j + scale_f * (w - BOX_BORDER_WIDTH);
+          image_data[i * stride + j_aux] = WHITE;
         }
       }
     }

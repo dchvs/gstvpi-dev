@@ -26,9 +26,6 @@ static const gchar *test_pipes[] = {
       "vpiupload ! vpiklttracker boxes=\"<<613,332,23,23>, <669,329,30,29>, <790, 376, 41, 22>>\" ! "
       "vpidownload ! fakesink",
   "videotestsrc ! capsfilter caps=video/x-raw,width=1280,height=720 ! "
-      "vpiupload ! vpiklttracker boxes=\"<<613,332,23>, <669,329,30>, <790, 376, 41, 22>>\" ! "
-      "vpidownload ! fakesink",
-  "videotestsrc ! capsfilter caps=video/x-raw,width=1280,height=720 ! "
       "vpiupload ! vpiklttracker name=tracker boxes=\"<<613,332,23,23>, "
       "<669,329,30,29>>\" ! vpidownload ! fakesink",
   NULL,
@@ -39,7 +36,6 @@ enum
   /* test names */
   TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_GRAY8,
   TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_GRAY16,
-  TEST_FAIL_WHEN_INVALID_NUMBER_OF_BOX_PARAMS,
   TEST_REDEFINING_BOXES_ON_THE_FLY,
 };
 
@@ -53,14 +49,6 @@ GST_END_TEST;
 GST_START_TEST (test_playing_to_null_multiple_times_gray_16)
 {
   test_states_change (test_pipes[TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_GRAY16]);
-}
-
-GST_END_TEST;
-
-GST_START_TEST (test_fail_when_invalid_number_of_box_params)
-{
-  test_fail_properties_configuration (test_pipes
-      [TEST_FAIL_WHEN_INVALID_NUMBER_OF_BOX_PARAMS]);
 }
 
 GST_END_TEST;
@@ -304,7 +292,6 @@ gst_vpi_klt_tracker_suite (void)
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray8);
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray_16);
-  tcase_add_test (tc, test_fail_when_invalid_number_of_box_params);
   tcase_add_test (tc, test_discard_when_more_than_64_box_provided);
   tcase_add_test (tc, test_redefine_to_more_boxes_on_the_fly);
   tcase_add_test (tc, test_redefine_to_less_boxes_on_the_fly);

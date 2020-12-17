@@ -106,4 +106,5 @@ gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
   GstVpiMeta *vpi_meta = (GstVpiMeta *) meta;
 
   vpiImageDestroy (vpi_meta->vpi_frame.image);
+  vpi_meta->vpi_frame.image = NULL;
 }

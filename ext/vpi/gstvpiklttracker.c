@@ -244,25 +244,18 @@ gst_vpi_klt_tracker_validate_thresholds (GstVpiKltTracker * self)
   GST_OBJECT_LOCK (self);
 
   /* We must verify that kill <= update <= stop */
-  if (self->klt_params.nccThresholdUpdate > self->klt_params.nccThresholdStop) {
-    goto error;
+  if ((self->klt_params.nccThresholdUpdate > self->klt_params.nccThresholdStop)
+      || (self->klt_params.nccThresholdKill >
+          self->klt_params.nccThresholdUpdate)) {
+    self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
+    self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
+    self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
+    GST_WARNING_OBJECT (self, "The relationship kill <= update <= stop was not"
+        " respected. Using default values for all the thresholds. kill=%f "
+        "update=%f stop=%f.", self->klt_params.nccThresholdKill,
+        self->klt_params.nccThresholdUpdate, self->klt_params.nccThresholdStop);
   }
-  if (self->klt_params.nccThresholdKill > self->klt_params.nccThresholdUpdate) {
-    goto error;
-  }
-  goto out;
-
-error:
-  self->klt_params.nccThresholdKill = DEFAULT_PROP_NCC_THRESHOLD_KILL;
-  self->klt_params.nccThresholdUpdate = DEFAULT_PROP_NCC_THRESHOLD_UPDATE;
-  self->klt_params.nccThresholdStop = DEFAULT_PROP_NCC_THRESHOLD_STOP;
-  GST_WARNING_OBJECT (self, "The relationship kill <= update <= stop was not "
-      "respected. Using default values for all the thresholds. kill=%f update="
-      "%f stop=%f.", self->klt_params.nccThresholdKill,
-      self->klt_params.nccThresholdUpdate, self->klt_params.nccThresholdStop);
-out:
   GST_OBJECT_UNLOCK (self);
-  return;
 }
 
 static gboolean

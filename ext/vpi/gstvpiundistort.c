@@ -522,7 +522,9 @@ gst_vpi_undistort_transform_image (GstVpiFilter * filter, VPIStream stream,
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
   g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame->image, GST_FLOW_ERROR);
   g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame->image, GST_FLOW_ERROR);
 
   self = GST_VPI_UNDISTORT (filter);
 

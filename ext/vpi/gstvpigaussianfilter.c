@@ -263,7 +263,9 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
   g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame->image, GST_FLOW_ERROR);
   g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame->image, GST_FLOW_ERROR);
 
   self = GST_VPI_GAUSSIAN_FILTER (filter);
 

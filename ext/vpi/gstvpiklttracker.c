@@ -66,7 +66,7 @@ struct _GstVpiKltTracker
   VPIArray input_trans_vpi_array;
   VPIArray output_box_vpi_array;
   VPIArray output_trans_vpi_array;
-  VPIImage template_image;
+  VpiFrame template_frame;
   VPIKLTFeatureTrackerParams klt_params;
   VPIPayload klt;
   gboolean wrapped_arrays;
@@ -80,7 +80,7 @@ struct _GstVpiKltTracker
 static gboolean gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo
     * in_info, GstVideoInfo * out_info);
 static GstFlowReturn gst_vpi_klt_tracker_transform_image (GstVpiFilter *
-    filter, VPIStream stream, VPIImage in_image, VPIImage out_image);
+    filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
 static gboolean gst_vpi_klt_tracker_stop (GstBaseTransform * trans);
 static void gst_vpi_klt_tracker_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
@@ -286,7 +286,8 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   gst_vpi_klt_tracker_validate_thresholds (self);
 
   self->first_frame = TRUE;
-  self->template_image = NULL;
+  self->template_frame.image = NULL;
+  self->template_frame.buffer = NULL;
 
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
@@ -471,7 +472,7 @@ gst_vpi_klt_tracker_track_bounding_boxes (GstVpiKltTracker * self,
   GST_OBJECT_LOCK (self);
   draw_box = self->draw_box;
   status =
-      vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_image,
+      vpiSubmitKLTFeatureTracker (stream, self->klt, self->template_frame.image,
       self->input_box_vpi_array, self->input_trans_vpi_array, in_image,
       self->output_box_vpi_array, self->output_trans_vpi_array,
       &self->klt_params);
@@ -503,7 +504,7 @@ out:
 
 static GstFlowReturn
 gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
-    VPIImage in_image, VPIImage out_image)
+    VpiFrame * in_frame, VpiFrame * out_frame)
 {
   GstVpiKltTracker *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
@@ -512,32 +513,38 @@ gst_vpi_klt_tracker_transform_image (GstVpiFilter * filter, VPIStream stream,
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
-  g_return_val_if_fail (in_image, GST_FLOW_ERROR);
-  g_return_val_if_fail (out_image, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame->image, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame->image, GST_FLOW_ERROR);
 
   self = GST_VPI_KLT_TRACKER (filter);
 
   GST_LOG_OBJECT (self, "Transform image");
 
   /* Copy input image to output image */
-  vpiImageLock (in_image, VPI_LOCK_READ, &vpi_in_image_data);
-  vpiImageLock (out_image, VPI_LOCK_READ_WRITE, &vpi_out_image_data);
+  vpiImageLock (in_frame->image, VPI_LOCK_READ, &vpi_in_image_data);
+  vpiImageLock (out_frame->image, VPI_LOCK_READ_WRITE, &vpi_out_image_data);
   memcpy (vpi_out_image_data.planes[0].data,
       vpi_in_image_data.planes[0].data, vpi_out_image_data.planes[0].height *
       vpi_out_image_data.planes[0].pitchBytes);
-  vpiImageUnlock (in_image);
-  vpiImageUnlock (out_image);
+  vpiImageUnlock (in_frame->image);
+  vpiImageUnlock (out_frame->image);
 
   if (self->first_frame) {
     GST_DEBUG_OBJECT (self, "Setting first frame");
     self->first_frame = FALSE;
 
   } else {
-    gst_vpi_klt_tracker_track_bounding_boxes (self, stream, in_image,
-        out_image);
+    gst_vpi_klt_tracker_track_bounding_boxes (self, stream, in_frame->image,
+        out_frame->image);
   }
 
-  self->template_image = in_image;
+  if (self->template_frame.buffer) {
+    gst_buffer_unref (self->template_frame.buffer);
+  }
+  self->template_frame.buffer = gst_buffer_ref (in_frame->buffer);
+  self->template_frame.image = in_frame->image;
 
   return ret;
 }
@@ -873,7 +880,11 @@ gst_vpi_klt_tracker_stop (GstBaseTransform * trans)
   vpiArrayDestroy (self->output_box_vpi_array);
   self->output_box_vpi_array = NULL;
 
-  self->template_image = NULL;
+  if (self->template_frame.buffer) {
+    gst_buffer_unref (self->template_frame.buffer);
+  }
+  self->template_frame.buffer = NULL;
+  self->template_frame.image = NULL;
 
   return ret;
 }

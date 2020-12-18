@@ -20,7 +20,6 @@
 
 #include "gstcudameta.h"
 #include "gstvpibufferpool.h"
-#include "gstvpimeta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_filter_debug_category
@@ -228,7 +227,7 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
         out_minfo.data, cudaMemAttachSingle);
 
     ret = vpi_filter_class->transform_image (self, priv->vpi_stream,
-        in_vpi_meta->vpi_image, out_vpi_meta->vpi_image);
+        &in_vpi_meta->vpi_frame, &out_vpi_meta->vpi_frame);
 
     vpiStreamSync (priv->vpi_stream);
 

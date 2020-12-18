@@ -56,8 +56,8 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   VPIImageData vpi_image_data;
   VPIStatus status;
 
-  g_return_val_if_fail (NULL != buffer, NULL);
-  g_return_val_if_fail (NULL != video_info, NULL);
+  g_return_val_if_fail (buffer, NULL);
+  g_return_val_if_fail (video_info, NULL);
 
   GST_LOG ("Adding VPI meta to buffer %p", buffer);
 
@@ -82,8 +82,9 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
         minfo.data + GST_VIDEO_INFO_PLANE_OFFSET (video_info, i);
   }
 
+  ret->vpi_frame.buffer = buffer;
   status = vpiImageCreateCudaMemWrapper (&vpi_image_data, VPI_BACKEND_ALL,
-      &(ret->vpi_image));
+      &(ret->vpi_frame.image));
   if (VPI_SUCCESS != status) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
     ret = NULL;
@@ -104,5 +105,6 @@ gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
 {
   GstVpiMeta *vpi_meta = (GstVpiMeta *) meta;
 
-  vpiImageDestroy (vpi_meta->vpi_image);
+  vpiImageDestroy (vpi_meta->vpi_frame.image);
+  vpi_meta->vpi_frame.image = NULL;
 }

@@ -22,6 +22,13 @@ G_BEGIN_DECLS
 #define GST_VPI_META_INFO  (gst_vpi_meta_get_info())
 
 typedef struct _GstVpiMeta GstVpiMeta;
+typedef struct _VpiFrame VpiFrame;
+
+struct _VpiFrame
+{
+  GstBuffer *buffer;
+  VPIImage image;
+};
 
 /**
  * GstVpiMeta:
@@ -32,8 +39,7 @@ typedef struct _GstVpiMeta GstVpiMeta;
 struct _GstVpiMeta
 {
   GstMeta meta;
-
-  VPIImage vpi_image;
+  VpiFrame vpi_frame;
 };
 
 /**

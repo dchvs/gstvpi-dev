@@ -15,9 +15,10 @@
 
 #include <gst/video/gstvideofilter.h>
 #include <gst/video/video.h>
-
 #include <vpi/Image.h>
 #include <vpi/Stream.h>
+
+#include "gstvpimeta.h"
 
 G_BEGIN_DECLS
 
@@ -32,7 +33,7 @@ struct _GstVpiFilterClass
   gboolean (*start) (GstVpiFilter *self, GstVideoInfo *in_info, GstVideoInfo
                      *out_info);
   GstFlowReturn (*transform_image) (GstVpiFilter *self, VPIStream stream,
-                                    VPIImage in_image, VPIImage out_image);
+                                    VpiFrame *in_frame, VpiFrame *out_frame);
 };
 
 G_END_DECLS

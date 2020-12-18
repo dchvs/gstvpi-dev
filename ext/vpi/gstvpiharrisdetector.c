@@ -18,6 +18,7 @@
 
 #include <gst/gst.h>
 #include <vpi/algo/HarrisCornerDetector.h>
+#include <vpi/Array.h>
 
 #include "gst-libs/gst/vpi/gstvpi.h"
 
@@ -26,9 +27,16 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8 }")
 
+/* PVA backend only allows 8192 */
+#define VPI_ARRAY_CAPACITY 8192
+
 struct _GstVpiHarrisDetector
 {
   GstVpiFilter parent;
+  VPIArray keypoints;
+  VPIArray scores;
+  VPIHarrisCornerDetectorParams harris_params;
+  VPIPayload harris;
 };
 
 /* prototypes */
@@ -88,6 +96,16 @@ gst_vpi_harris_detector_class_init (GstVpiHarrisDetectorClass * klass)
 static void
 gst_vpi_harris_detector_init (GstVpiHarrisDetector * self)
 {
+  self->keypoints = NULL;
+  self->scores = NULL;
+  self->harris = NULL;
+  /* TODO: Expose these as properties */
+  self->harris_params.gradientSize = 5;
+  self->harris_params.blockSize = 5;
+  self->harris_params.strengthThresh = 20;
+  self->harris_params.sensitivity = 0.01;
+  /* PVA backend only allows 8 */
+  self->harris_params.minNMSDistance = 8;
 }
 
 static gboolean
@@ -96,9 +114,50 @@ gst_vpi_harris_detector_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 {
   GstVpiHarrisDetector *self = GST_VPI_HARRIS_DETECTOR (filter);
   gboolean ret = TRUE;
+  VPIStatus status = VPI_SUCCESS;
+  guint width = 0;
+  guint height = 0;
+
+  g_return_val_if_fail (filter, FALSE);
+  g_return_val_if_fail (in_info, FALSE);
+  g_return_val_if_fail (out_info, FALSE);
 
   GST_DEBUG_OBJECT (self, "start");
 
+  status = vpiArrayCreate (VPI_ARRAY_CAPACITY, VPI_ARRAY_TYPE_KEYPOINT,
+      VPI_BACKEND_ALL, &self->keypoints);
+
+  if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create keypoints array."), ("%s",
+            vpiStatusGetName (status)));
+    ret = FALSE;
+    goto out;
+  }
+
+  status = vpiArrayCreate (VPI_ARRAY_CAPACITY, VPI_ARRAY_TYPE_U32,
+      VPI_BACKEND_ALL, &self->scores);
+
+  if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create scores array."), ("%s", vpiStatusGetName (status)));
+    ret = FALSE;
+    goto free_keypoints_array;
+  }
+
+  width = GST_VIDEO_INFO_WIDTH (in_info);
+  height = GST_VIDEO_INFO_HEIGHT (in_info);
+
+  status = vpiCreateHarrisCornerDetector (VPI_BACKEND_CUDA, width, height,
+      &self->harris);
+
+  goto out;
+
+free_keypoints_array:
+  vpiArrayDestroy (self->keypoints);
+  self->keypoints = NULL;
+
+out:
   return ret;
 }
 
@@ -108,6 +167,8 @@ gst_vpi_harris_detector_transform_image (GstVpiFilter * filter,
 {
   GstVpiHarrisDetector *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  VPIImageData vpi_in_image_data = { 0 };
+  VPIImageData vpi_out_image_data = { 0 };
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -120,7 +181,22 @@ gst_vpi_harris_detector_transform_image (GstVpiFilter * filter,
 
   GST_LOG_OBJECT (self, "Transform image");
 
-  /* TODO: Add Harris detection */
+  /* TODO: Avoid this using in place transformation */
+  vpiImageLock (in_frame->image, VPI_LOCK_READ, &vpi_in_image_data);
+  vpiImageLock (out_frame->image, VPI_LOCK_READ_WRITE, &vpi_out_image_data);
+  memcpy (vpi_out_image_data.planes[0].data,
+      vpi_in_image_data.planes[0].data, vpi_out_image_data.planes[0].height *
+      vpi_out_image_data.planes[0].pitchBytes);
+  vpiImageUnlock (in_frame->image);
+  vpiImageUnlock (out_frame->image);
+
+  GST_OBJECT_LOCK (self);
+
+  vpiSubmitHarrisCornerDetector (stream, self->harris, in_frame->image,
+      self->keypoints, self->scores, &self->harris_params);
+  vpiStreamSync (stream);
+
+  GST_OBJECT_UNLOCK (self);
 
   return ret;
 }
@@ -172,6 +248,19 @@ gst_vpi_harris_detector_stop (GstBaseTransform * trans)
   GST_BASE_TRANSFORM_CLASS (gst_vpi_harris_detector_parent_class)->stop (trans);
 
   GST_DEBUG_OBJECT (self, "stop");
+
+  GST_OBJECT_LOCK (self);
+
+  vpiArrayDestroy (self->keypoints);
+  self->keypoints = NULL;
+
+  vpiArrayDestroy (self->scores);
+  self->scores = NULL;
+
+  vpiPayloadDestroy (self->harris);
+  self->harris = NULL;
+
+  GST_OBJECT_UNLOCK (self);
 
   return ret;
 }

@@ -29,6 +29,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 
 /* PVA backend only allows 8192 */
 #define VPI_ARRAY_CAPACITY 8192
+#define KEYPOINTS_BORDER 3
+#define BLACK 0
+#define WHITE 255
 
 struct _GstVpiHarrisDetector
 {
@@ -161,6 +164,56 @@ out:
   return ret;
 }
 
+static void
+gst_vpi_harris_detector_draw_keypoints (GstVpiHarrisDetector * self,
+    VPIImage image)
+{
+  VPIArrayData out_keypoints_data = { 0 };
+  VPIKeypoint *out_keypoints = NULL;
+  VPIImageData vpi_image_data = { 0 };
+  guint8 *image_data = NULL;
+  guint stride = 0;
+  guint k, i, j = 0;
+  guint x, y = 0;
+  gint width, height = 0;
+  gint top, bottom, left, right = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (image);
+
+  vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
+
+  /* Supported format only have one plane */
+  stride = vpi_image_data.planes[0].pitchBytes;
+  width = vpi_image_data.planes[0].width;
+  height = vpi_image_data.planes[0].height;
+  image_data = (guint8 *) vpi_image_data.planes[0].data;
+
+  vpiArrayLock (self->keypoints, VPI_LOCK_READ, &out_keypoints_data);
+
+  out_keypoints = (VPIKeypoint *) out_keypoints_data.data;
+
+  vpiArrayUnlock (self->keypoints);
+  vpiArrayUnlock (self->scores);
+
+  for (k = 0; k < out_keypoints_data.size; k++) {
+    x = (guint) out_keypoints[k].x;
+    y = (guint) out_keypoints[k].y;
+    /* The points are drawn with an extra border to make them bigger, but we
+       have to watch for the image limits */
+    top = (y >= KEYPOINTS_BORDER) ? y - KEYPOINTS_BORDER : 0;
+    bottom = (y + KEYPOINTS_BORDER < height) ? y + KEYPOINTS_BORDER : height;
+    left = (x >= KEYPOINTS_BORDER) ? x - KEYPOINTS_BORDER : 0;
+    right = (x + KEYPOINTS_BORDER < width) ? x + KEYPOINTS_BORDER : width;
+    for (i = top; i < bottom; i++) {
+      for (j = left; j < right; j++) {
+        image_data[i * stride + j] = WHITE;
+      }
+    }
+  }
+  vpiImageUnlock (image);
+}
+
 static GstFlowReturn
 gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
     VPIStream stream, VpiFrame * frame)
@@ -182,6 +235,8 @@ gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
   vpiSubmitHarrisCornerDetector (stream, self->harris, frame->image,
       self->keypoints, self->scores, &self->harris_params);
   vpiStreamSync (stream);
+
+  gst_vpi_harris_detector_draw_keypoints (self, frame->image);
 
   GST_OBJECT_UNLOCK (self);
 

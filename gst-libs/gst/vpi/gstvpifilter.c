@@ -292,6 +292,7 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
 
   if (vpi_meta) {
 
+    frame->buffer = gst_buffer_make_writable (frame->buffer);
     gst_buffer_map (frame->buffer, &minfo, GST_MAP_READWRITE);
 
     gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream, minfo.data,

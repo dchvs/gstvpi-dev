@@ -20,6 +20,9 @@ G_BEGIN_DECLS
 #define GST_TYPE_VPI_HARRIS_DETECTOR (gst_vpi_harris_detector_get_type())
 G_DECLARE_FINAL_TYPE(GstVpiHarrisDetector, gst_vpi_harris_detector, GST, VPI_HARRIS_DETECTOR, GstVpiFilter)
 
+#define VPI_HARRIS_PARAMS_SIZE_ENUM (vpi_harris_params_size_enum_get_type ())
+    GType vpi_harris_params_size_enum_get_type (void);
+
 G_END_DECLS
 
 #endif

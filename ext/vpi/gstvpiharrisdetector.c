@@ -32,6 +32,12 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 #define KEYPOINTS_BORDER 3
 #define BLACK 0
 #define WHITE 255
+#define HARRIS_PARAMS_SIZE_3 3
+#define HARRIS_PARAMS_SIZE_5 5
+#define HARRIS_PARAMS_SIZE_7 7
+
+#define DEFAULT_PROP_GRADIENT_SIZE HARRIS_PARAMS_SIZE_5
+#define DEFAULT_PROP_BLOCK_SIZE HARRIS_PARAMS_SIZE_5
 
 struct _GstVpiHarrisDetector
 {
@@ -56,8 +62,32 @@ static void gst_vpi_harris_detector_finalize (GObject * object);
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_GRADIENT_SIZE,
+  PROP_BLOCK_SIZE
 };
+
+GType
+vpi_harris_params_size_enum_get_type (void)
+{
+  static GType vpi_harris_params_size_enum_type = 0;
+  static const GEnumValue values[] = {
+    {HARRIS_PARAMS_SIZE_3, "Gradient/window size of 3",
+        "3"},
+    {HARRIS_PARAMS_SIZE_5, "Gradient/window size of 5",
+        "5"},
+    {HARRIS_PARAMS_SIZE_7, "Gradient/window size of 7",
+        "7"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_harris_params_size_enum_type) {
+    vpi_harris_params_size_enum_type =
+        g_enum_register_static ("VpiHarrisParamsSize", values);
+  }
+
+  return vpi_harris_params_size_enum_type;
+}
 
 /* class initialization */
 
@@ -94,6 +124,18 @@ gst_vpi_harris_detector_class_init (GstVpiHarrisDetectorClass * klass)
   gobject_class->set_property = gst_vpi_harris_detector_set_property;
   gobject_class->get_property = gst_vpi_harris_detector_get_property;
   gobject_class->finalize = gst_vpi_harris_detector_finalize;
+
+  g_object_class_install_property (gobject_class, PROP_GRADIENT_SIZE,
+      g_param_spec_enum ("gradient", "Gradient size",
+          "Gradient window size.",
+          VPI_HARRIS_PARAMS_SIZE_ENUM, DEFAULT_PROP_GRADIENT_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_BLOCK_SIZE,
+      g_param_spec_enum ("block", "Block size",
+          "Block window size used to compute the Harris Corner score.",
+          VPI_HARRIS_PARAMS_SIZE_ENUM, DEFAULT_PROP_BLOCK_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -103,8 +145,8 @@ gst_vpi_harris_detector_init (GstVpiHarrisDetector * self)
   self->scores = NULL;
   self->harris = NULL;
   /* TODO: Expose these as properties */
-  self->harris_params.gradientSize = 5;
-  self->harris_params.blockSize = 5;
+  self->harris_params.gradientSize = DEFAULT_PROP_GRADIENT_SIZE;
+  self->harris_params.blockSize = DEFAULT_PROP_BLOCK_SIZE;
   self->harris_params.strengthThresh = 20;
   self->harris_params.sensitivity = 0.01;
   /* PVA backend only allows 8 */
@@ -255,6 +297,12 @@ gst_vpi_harris_detector_set_property (GObject * object, guint property_id,
   switch (property_id) {
     case PROP_0:
       break;
+    case PROP_GRADIENT_SIZE:
+      self->harris_params.gradientSize = g_value_get_enum (value);
+      break;
+    case PROP_BLOCK_SIZE:
+      self->harris_params.blockSize = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -273,6 +321,12 @@ gst_vpi_harris_detector_get_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_0:
+      break;
+    case PROP_GRADIENT_SIZE:
+      g_value_set_enum (value, self->harris_params.gradientSize);
+      break;
+    case PROP_BLOCK_SIZE:
+      g_value_set_enum (value, self->harris_params.blockSize);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

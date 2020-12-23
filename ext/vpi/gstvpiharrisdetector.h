@@ -23,6 +23,9 @@ G_DECLARE_FINAL_TYPE(GstVpiHarrisDetector, gst_vpi_harris_detector, GST, VPI_HAR
 #define VPI_HARRIS_PARAMS_SIZE_ENUM (vpi_harris_params_size_enum_get_type ())
     GType vpi_harris_params_size_enum_get_type (void);
 
+#define VPI_COLORS_ENUM (vpi_colors_enum_get_type ())
+    GType vpi_colors_enum_get_type (void);
+
 G_END_DECLS
 
 #endif

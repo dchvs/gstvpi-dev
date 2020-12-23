@@ -20,8 +20,6 @@
 #include <vpi/algo/HarrisCornerDetector.h>
 #include <vpi/Array.h>
 
-#include "gst-libs/gst/vpi/gstvpi.h"
-
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_harris_detector_debug_category
 
@@ -36,8 +34,18 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 #define HARRIS_PARAMS_SIZE_5 5
 #define HARRIS_PARAMS_SIZE_7 7
 
+#define DEFAULT_PROP_MIN_NMS_DISTANCE_MIN 0
+#define DEFAULT_PROP_MIN_NMS_DISTANCE_MAX G_MAXDOUBLE
+#define DEFAULT_PROP_SENSITIVITY_MIN 0
+#define DEFAULT_PROP_SENSITIVITY_MAX 1
+#define DEFAULT_PROP_STRENGTH_THRESH_MIN 0
+#define DEFAULT_PROP_STRENGTH_THRESH_MAX G_MAXDOUBLE
+
 #define DEFAULT_PROP_GRADIENT_SIZE HARRIS_PARAMS_SIZE_5
 #define DEFAULT_PROP_BLOCK_SIZE HARRIS_PARAMS_SIZE_5
+#define DEFAULT_PROP_MIN_NMS_DISTANCE 8
+#define DEFAULT_PROP_SENSITIVITY 0.01
+#define DEFAULT_PROP_STRENGTH_THRESH 20
 
 struct _GstVpiHarrisDetector
 {
@@ -64,7 +72,10 @@ enum
 {
   PROP_0,
   PROP_GRADIENT_SIZE,
-  PROP_BLOCK_SIZE
+  PROP_BLOCK_SIZE,
+  PROP_MIN_NMS_DISTANCE,
+  PROP_SENSITIVITY,
+  PROP_STRENGTH_THRESH
 };
 
 GType
@@ -136,6 +147,29 @@ gst_vpi_harris_detector_class_init (GstVpiHarrisDetectorClass * klass)
           "Block window size used to compute the Harris Corner score.",
           VPI_HARRIS_PARAMS_SIZE_ENUM, DEFAULT_PROP_BLOCK_SIZE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_MIN_NMS_DISTANCE,
+      g_param_spec_double ("nms-distance", "Minimum NMS distance",
+          "Non-maximum suppression radius, set to 0 to disable it. For PVA "
+          "backend, this must be set to 8.",
+          DEFAULT_PROP_MIN_NMS_DISTANCE_MIN, DEFAULT_PROP_MIN_NMS_DISTANCE_MAX,
+          DEFAULT_PROP_MIN_NMS_DISTANCE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SENSITIVITY,
+      g_param_spec_double ("sensitivity", "Sensitivity threshold",
+          "Specifies sensitivity threshold from the Harris-Stephens equation.",
+          DEFAULT_PROP_SENSITIVITY_MIN, DEFAULT_PROP_SENSITIVITY_MAX,
+          DEFAULT_PROP_SENSITIVITY,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_STRENGTH_THRESH,
+      g_param_spec_double ("strength-thresh", "Strength threshold",
+          "Specifies the minimum threshold with which to eliminate Harris "
+          "Corner scores.",
+          DEFAULT_PROP_STRENGTH_THRESH_MIN, DEFAULT_PROP_STRENGTH_THRESH_MAX,
+          DEFAULT_PROP_STRENGTH_THRESH,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -144,13 +178,12 @@ gst_vpi_harris_detector_init (GstVpiHarrisDetector * self)
   self->keypoints = NULL;
   self->scores = NULL;
   self->harris = NULL;
-  /* TODO: Expose these as properties */
   self->harris_params.gradientSize = DEFAULT_PROP_GRADIENT_SIZE;
   self->harris_params.blockSize = DEFAULT_PROP_BLOCK_SIZE;
-  self->harris_params.strengthThresh = 20;
-  self->harris_params.sensitivity = 0.01;
+  self->harris_params.strengthThresh = DEFAULT_PROP_STRENGTH_THRESH;
+  self->harris_params.sensitivity = DEFAULT_PROP_SENSITIVITY;
   /* PVA backend only allows 8 */
-  self->harris_params.minNMSDistance = 8;
+  self->harris_params.minNMSDistance = DEFAULT_PROP_MIN_NMS_DISTANCE;
 }
 
 static gboolean
@@ -303,6 +336,15 @@ gst_vpi_harris_detector_set_property (GObject * object, guint property_id,
     case PROP_BLOCK_SIZE:
       self->harris_params.blockSize = g_value_get_enum (value);
       break;
+    case PROP_MIN_NMS_DISTANCE:
+      self->harris_params.minNMSDistance = g_value_get_double (value);
+      break;
+    case PROP_SENSITIVITY:
+      self->harris_params.sensitivity = g_value_get_double (value);
+      break;
+    case PROP_STRENGTH_THRESH:
+      self->harris_params.strengthThresh = g_value_get_double (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -327,6 +369,15 @@ gst_vpi_harris_detector_get_property (GObject * object, guint property_id,
       break;
     case PROP_BLOCK_SIZE:
       g_value_set_enum (value, self->harris_params.blockSize);
+      break;
+    case PROP_MIN_NMS_DISTANCE:
+      g_value_set_double (value, self->harris_params.minNMSDistance);
+      break;
+    case PROP_SENSITIVITY:
+      g_value_set_double (value, self->harris_params.sensitivity);
+      break;
+    case PROP_STRENGTH_THRESH:
+      g_value_set_double (value, self->harris_params.strengthThresh);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

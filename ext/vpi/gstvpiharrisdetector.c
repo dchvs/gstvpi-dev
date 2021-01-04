@@ -324,11 +324,8 @@ gst_vpi_harris_detector_draw_keypoints (GstVpiHarrisDetector * self,
   image_data = (guint8 *) vpi_image_data.planes[0].data;
 
   vpiArrayLock (self->keypoints, VPI_LOCK_READ, &out_keypoints_data);
-
   out_keypoints = (VPIKeypoint *) out_keypoints_data.data;
-
   vpiArrayUnlock (self->keypoints);
-  vpiArrayUnlock (self->scores);
 
   for (k = 0; k < out_keypoints_data.size; k++) {
     x = (guint) out_keypoints[k].x;

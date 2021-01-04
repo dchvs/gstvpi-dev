@@ -70,7 +70,6 @@ static void gst_vpi_harris_detector_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_harris_detector_get_property (GObject * object,
     guint property_id, GValue * value, GParamSpec * pspec);
-static void gst_vpi_harris_detector_finalize (GObject * object);
 
 enum
 {
@@ -158,7 +157,6 @@ gst_vpi_harris_detector_class_init (GstVpiHarrisDetectorClass * klass)
   base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_harris_detector_stop);
   gobject_class->set_property = gst_vpi_harris_detector_set_property;
   gobject_class->get_property = gst_vpi_harris_detector_get_property;
-  gobject_class->finalize = gst_vpi_harris_detector_finalize;
 
   g_object_class_install_property (gobject_class, PROP_GRADIENT_SIZE,
       g_param_spec_enum ("gradient-size", "Gradient size",
@@ -476,14 +474,4 @@ gst_vpi_harris_detector_stop (GstBaseTransform * trans)
   self->harris = NULL;
 
   return ret;
-}
-
-void
-gst_vpi_harris_detector_finalize (GObject * object)
-{
-  GstVpiHarrisDetector *self = GST_VPI_HARRIS_DETECTOR (object);
-
-  GST_DEBUG_OBJECT (self, "finalize");
-
-  G_OBJECT_CLASS (gst_vpi_harris_detector_parent_class)->finalize (object);
 }

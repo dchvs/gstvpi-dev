@@ -821,9 +821,11 @@ gst_vpi_klt_tracker_append_new_box (GstVpiKltTracker * self, gint x, gint y,
     goto out;
   }
 
+  GST_OBJECT_LOCK (self);
   gst_vpi_klt_tracker_set_box_at (self, priv->total_boxes, x, y, width, height);
   priv->total_boxes++;
   gst_vpi_klt_tracker_update_vpi_arrays (self, priv->total_boxes);
+  GST_OBJECT_UNLOCK (self);
 
 out:
   return;

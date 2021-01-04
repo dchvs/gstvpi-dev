@@ -649,12 +649,9 @@ gst_vpi_klt_tracker_update_vpi_arrays (GstVpiKltTracker * self, gint boxes)
   /* If the wrappers have not been created, do it with new boxes data */
   if (!priv->wrapped_arrays) {
     ret = gst_vpi_klt_tracker_set_vpi_arrays (self, boxes);
-    if (VPI_SUCCESS != ret) {
-      goto out;
-    }
-    priv->wrapped_arrays = TRUE;
+    priv->wrapped_arrays = (VPI_SUCCESS == ret);
   } else {
-    /* Update the VPI array size according to new boxes received */
+    /* Update the VPI array size in case number of boxes changed */
     if (boxes != priv->total_boxes) {
       vpiArrayLock (priv->input_box_vpi_array, VPI_LOCK_READ_WRITE, NULL);
       vpiArraySetSize (priv->input_box_vpi_array, boxes);
@@ -663,11 +660,10 @@ gst_vpi_klt_tracker_update_vpi_arrays (GstVpiKltTracker * self, gint boxes)
       vpiArraySetSize (priv->input_trans_vpi_array, boxes);
       vpiArrayUnlock (priv->input_trans_vpi_array);
     }
-
+    /* Update the VPI array content */
     vpiArrayInvalidate (priv->input_box_vpi_array);
     vpiArrayInvalidate (priv->input_trans_vpi_array);
   }
-out:
   return ret;
 }
 

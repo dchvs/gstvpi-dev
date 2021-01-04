@@ -350,6 +350,7 @@ gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
 {
   GstVpiHarrisDetector *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  VPIHarrisCornerDetectorParams params = { 0 };
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -361,12 +362,12 @@ gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
   GST_LOG_OBJECT (self, "Transform image ip");
 
   GST_OBJECT_LOCK (self);
+  params = self->harris_params;
+  GST_OBJECT_UNLOCK (self);
 
   vpiSubmitHarrisCornerDetector (stream, self->harris, frame->image,
-      self->keypoints, self->scores, &self->harris_params);
+      self->keypoints, self->scores, &params);
   vpiStreamSync (stream);
-
-  GST_OBJECT_UNLOCK (self);
 
   if (self->draw_keypoints) {
     gst_vpi_harris_detector_draw_keypoints (self, frame->image);
@@ -465,8 +466,6 @@ gst_vpi_harris_detector_stop (GstBaseTransform * trans)
 
   GST_DEBUG_OBJECT (self, "stop");
 
-  GST_OBJECT_LOCK (self);
-
   vpiArrayDestroy (self->keypoints);
   self->keypoints = NULL;
 
@@ -475,8 +474,6 @@ gst_vpi_harris_detector_stop (GstBaseTransform * trans)
 
   vpiPayloadDestroy (self->harris);
   self->harris = NULL;
-
-  GST_OBJECT_UNLOCK (self);
 
   return ret;
 }

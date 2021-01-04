@@ -267,7 +267,19 @@ gst_vpi_harris_detector_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   status = vpiCreateHarrisCornerDetector (VPI_BACKEND_CUDA, width, height,
       &self->harris);
 
+  if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create Harris corner detector"),
+        ("%s", vpiStatusGetName (status)));
+    ret = FALSE;
+    goto free_scores_array;
+  }
+
   goto out;
+
+free_scores_array:
+  vpiArrayDestroy (self->scores);
+  self->scores = NULL;
 
 free_keypoints_array:
   vpiArrayDestroy (self->keypoints);

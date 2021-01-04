@@ -161,13 +161,13 @@ gst_vpi_harris_detector_class_init (GstVpiHarrisDetectorClass * klass)
   gobject_class->finalize = gst_vpi_harris_detector_finalize;
 
   g_object_class_install_property (gobject_class, PROP_GRADIENT_SIZE,
-      g_param_spec_enum ("gradient", "Gradient size",
+      g_param_spec_enum ("gradient-size", "Gradient size",
           "Gradient window size.",
           VPI_HARRIS_PARAMS_SIZE_ENUM, DEFAULT_PROP_GRADIENT_SIZE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_BLOCK_SIZE,
-      g_param_spec_enum ("block", "Block size",
+      g_param_spec_enum ("block-size", "Block size",
           "Block window size used to compute the Harris Corner score.",
           VPI_HARRIS_PARAMS_SIZE_ENUM, DEFAULT_PROP_BLOCK_SIZE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));

@@ -25,6 +25,12 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8 }")
 
+#define VPI_HARRIS_PARAMS_SIZE_ENUM (vpi_harris_params_size_enum_get_type ())
+GType vpi_harris_params_size_enum_get_type (void);
+
+#define VPI_COLORS_ENUM (vpi_colors_enum_get_type ())
+GType vpi_colors_enum_get_type (void);
+
 /* PVA backend only allows 8192 */
 #define VPI_ARRAY_CAPACITY 8192
 #define KEYPOINTS_BORDER 3

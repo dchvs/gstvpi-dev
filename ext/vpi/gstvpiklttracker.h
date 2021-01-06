@@ -18,7 +18,15 @@
 G_BEGIN_DECLS
 
 #define GST_TYPE_VPI_KLT_TRACKER (gst_vpi_klt_tracker_get_type())
-G_DECLARE_FINAL_TYPE(GstVpiKltTracker, gst_vpi_klt_tracker, GST, VPI_KLT_TRACKER, GstVpiFilter)
+G_DECLARE_DERIVABLE_TYPE(GstVpiKltTracker, gst_vpi_klt_tracker, GST, VPI_KLT_TRACKER, GstVpiFilter)
+
+struct _GstVpiKltTrackerClass {
+  GstVpiFilterClass parent_class;
+
+  /* actions */
+  void (*append_new_box) (GstVpiKltTracker *self, gint x, gint y, gint width,
+                          gint height);
+};
 
 G_END_DECLS
 

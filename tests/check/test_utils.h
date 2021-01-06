@@ -58,23 +58,4 @@ test_states_change (const gchar * pipe_desc)
   gst_object_unref (pipeline);
 }
 
-void
-test_fail_properties_configuration (const gchar * pipe_desc)
-{
-  GstElement *pipeline = NULL;
-
-  pipeline = test_create_pipeline (pipe_desc);
-
-  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_PAUSED),
-      GST_STATE_CHANGE_ASYNC);
-  /* Pipeline must fail due to incorrect properties configuration validated
-     on start function. */
-  fail_unless_equals_int (gst_element_get_state (pipeline, NULL, NULL, -1),
-      GST_STATE_CHANGE_FAILURE);
-
-  gst_element_set_state (pipeline, GST_STATE_NULL);
-
-  gst_object_unref (pipeline);
-}
-
 #endif

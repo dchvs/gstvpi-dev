@@ -26,9 +26,6 @@ static const gchar *test_pipes[] = {
       "vpiupload ! vpiklttracker boxes=\"<<613,332,23,23>, <669,329,30,29>, <790, 376, 41, 22>>\" ! "
       "vpidownload ! fakesink",
   "videotestsrc ! capsfilter caps=video/x-raw,width=1280,height=720 ! "
-      "vpiupload ! vpiklttracker boxes=\"<<613,332,23>, <669,329,30>, <790, 376, 41, 22>>\" ! "
-      "vpidownload ! fakesink",
-  "videotestsrc ! capsfilter caps=video/x-raw,width=1280,height=720 ! "
       "vpiupload ! vpiklttracker name=tracker boxes=\"<<613,332,23,23>, "
       "<669,329,30,29>>\" ! vpidownload ! fakesink",
   NULL,
@@ -39,7 +36,6 @@ enum
   /* test names */
   TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_GRAY8,
   TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_GRAY16,
-  TEST_FAIL_WHEN_INVALID_NUMBER_OF_BOX_PARAMS,
   TEST_REDEFINING_BOXES_ON_THE_FLY,
 };
 
@@ -53,14 +49,6 @@ GST_END_TEST;
 GST_START_TEST (test_playing_to_null_multiple_times_gray_16)
 {
   test_states_change (test_pipes[TEST_PLAYING_TO_NULL_MULTIPLE_TIMES_GRAY16]);
-}
-
-GST_END_TEST;
-
-GST_START_TEST (test_fail_when_invalid_number_of_box_params)
-{
-  test_fail_properties_configuration (test_pipes
-      [TEST_FAIL_WHEN_INVALID_NUMBER_OF_BOX_PARAMS]);
 }
 
 GST_END_TEST;
@@ -161,7 +149,7 @@ compare_c_array_with_gst_array (GValue * gst_array,
 }
 
 static void
-test_redefine_boxes_on_the_fly (gint set_array[][NUMBER_PARAMS],
+redefine_boxes_on_the_fly (gint set_array[][NUMBER_PARAMS],
     gint get_array[][NUMBER_PARAMS], gint set_boxes, gint get_boxes)
 {
   GstElement *pipeline = NULL;
@@ -190,8 +178,8 @@ test_redefine_boxes_on_the_fly (gint set_array[][NUMBER_PARAMS],
   g_usleep (SLEEP_TIME);
 
   g_object_set_property (G_OBJECT (tracker), "boxes", &set_gst_array);
-  g_object_get_property (G_OBJECT (tracker), "boxes", &get_gst_array);
   /* Test if what gst gets is what was expected */
+  g_object_get_property (G_OBJECT (tracker), "boxes", &get_gst_array);
   compare_c_array_with_gst_array (&get_gst_array, get_array, get_boxes);
 
   g_usleep (SLEEP_TIME);
@@ -202,10 +190,64 @@ test_redefine_boxes_on_the_fly (gint set_array[][NUMBER_PARAMS],
   gst_object_unref (pipeline);
 }
 
+static void
+append_boxes_on_the_fly (gint set_array[][NUMBER_PARAMS],
+    gint get_array[][NUMBER_PARAMS], gint set_boxes, gint get_boxes)
+{
+  GstElement *pipeline = NULL;
+  GstElement *tracker = NULL;
+  GValue get_gst_array = G_VALUE_INIT;
+  gint i = 0;
+
+  g_value_init (&get_gst_array, GST_TYPE_ARRAY);
+
+  pipeline =
+      test_create_pipeline (test_pipes[TEST_REDEFINING_BOXES_ON_THE_FLY]);
+
+  tracker = gst_bin_get_by_name (GST_BIN (pipeline), "tracker");
+
+  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_PLAYING),
+      GST_STATE_CHANGE_ASYNC);
+  fail_unless_equals_int (gst_element_get_state (pipeline, NULL, NULL, -1),
+      GST_STATE_CHANGE_SUCCESS);
+
+  for (i = 0; i < set_boxes; i++) {
+    g_signal_emit_by_name (tracker, "new-box", set_array[i][0], set_array[i][1],
+        set_array[i][2], set_array[i][3]);
+  }
+
+  g_object_get_property (G_OBJECT (tracker), "boxes", &get_gst_array);
+  /* Test if what gst gets is what was expected */
+  compare_c_array_with_gst_array (&get_gst_array, get_array, get_boxes);
+
+  fail_unless_equals_int (gst_element_set_state (pipeline, GST_STATE_NULL),
+      GST_STATE_CHANGE_SUCCESS);
+
+  gst_object_unref (pipeline);
+}
+
+GST_START_TEST (test_append_boxes_on_the_fly)
+{
+  gint set_array[3][NUMBER_PARAMS] = { {613, 332, 34, 23}
+  , {669, 329, 50, 80}          /* This one should be discarded */
+  , {790, 376, 41, 22}
+  };
+  gint get_array[4][NUMBER_PARAMS] = { {613, 332, 23, 23}
+  , {669, 329, 30, 29}
+  , {613, 332, 34, 23}
+  , {790, 376, 41, 22}
+  };
+
+  append_boxes_on_the_fly (set_array, get_array, 3, 4);
+}
+
+GST_END_TEST;
+
 GST_START_TEST (test_redefine_to_less_boxes_on_the_fly)
 {
-  gint set_array[1][NUMBER_PARAMS] = { {613, 372, 53, 23} };
-  test_redefine_boxes_on_the_fly (set_array, set_array, 1, 1);
+  gint set_array[1][NUMBER_PARAMS] = { {613, 372, 53, 23}
+  };
+  redefine_boxes_on_the_fly (set_array, set_array, 1, 1);
 }
 
 GST_END_TEST;
@@ -218,7 +260,7 @@ GST_START_TEST (test_redefine_to_more_boxes_on_the_fly)
   , {669, 329, 30, 30}
   , {669, 329, 50, 30}
   };
-  test_redefine_boxes_on_the_fly (set_array, set_array, 5, 5);
+  redefine_boxes_on_the_fly (set_array, set_array, 5, 5);
 }
 
 GST_END_TEST;
@@ -236,7 +278,7 @@ GST_START_TEST (test_redefine_and_discard_boxes_on_the_fly)
   };
   /* Here some boxes have invalid dimensions, therefore set and get arrays
      are different */
-  test_redefine_boxes_on_the_fly (set_array, get_array, 5, 2);
+  redefine_boxes_on_the_fly (set_array, get_array, 5, 2);
 }
 
 GST_END_TEST;
@@ -250,11 +292,11 @@ gst_vpi_klt_tracker_suite (void)
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray8);
   tcase_add_test (tc, test_playing_to_null_multiple_times_gray_16);
-  tcase_add_test (tc, test_fail_when_invalid_number_of_box_params);
   tcase_add_test (tc, test_discard_when_more_than_64_box_provided);
   tcase_add_test (tc, test_redefine_to_more_boxes_on_the_fly);
   tcase_add_test (tc, test_redefine_to_less_boxes_on_the_fly);
   tcase_add_test (tc, test_redefine_and_discard_boxes_on_the_fly);
+  tcase_add_test (tc, test_append_boxes_on_the_fly);
 
   return suite;
 }

@@ -34,8 +34,10 @@ GType vpi_colors_enum_get_type (void);
 /* PVA backend only allows 8192 */
 #define VPI_ARRAY_CAPACITY 8192
 #define KEYPOINTS_BORDER 3
+#define KEYPOINTS_SIZE 0
 #define BLACK 0
 #define WHITE 255
+#define KEYPOINT_META_TYPE "keypoint"
 #define HARRIS_PARAMS_SIZE_3 3
 #define HARRIS_PARAMS_SIZE_5 5
 #define HARRIS_PARAMS_SIZE_7 7
@@ -347,6 +349,31 @@ gst_vpi_harris_detector_draw_keypoints (GstVpiHarrisDetector * self,
   vpiImageUnlock (image);
 }
 
+static void
+gst_vpi_harris_detector_add_keypoints_meta (GstVpiHarrisDetector * self,
+    GstBuffer * buffer)
+{
+  VPIArrayData out_keypoints_data = { 0 };
+  VPIKeypoint *out_keypoints = NULL;
+  guint k = 0;
+  guint x, y = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (buffer);
+
+  vpiArrayLock (self->keypoints, VPI_LOCK_READ, &out_keypoints_data);
+  out_keypoints = (VPIKeypoint *) out_keypoints_data.data;
+  vpiArrayUnlock (self->keypoints);
+
+  for (k = 0; k < out_keypoints_data.size; k++) {
+    x = (guint) out_keypoints[k].x;
+    y = (guint) out_keypoints[k].y;
+
+    gst_buffer_add_video_region_of_interest_meta (buffer,
+        KEYPOINT_META_TYPE, x, y, KEYPOINTS_SIZE, KEYPOINTS_SIZE);
+  }
+}
+
 static GstFlowReturn
 gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
     VPIStream stream, VpiFrame * frame)
@@ -375,6 +402,7 @@ gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
   if (self->draw_keypoints) {
     gst_vpi_harris_detector_draw_keypoints (self, frame->image);
   }
+  gst_vpi_harris_detector_add_keypoints_meta (self, frame->buffer);
 
   return ret;
 }

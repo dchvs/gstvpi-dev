@@ -20,6 +20,7 @@
 #include "gstvpigaussianfilter.h"
 #include "gstvpiharrisdetector.h"
 #include "gstvpiklttracker.h"
+#include "gstvpioverlay.h"
 #include "gstvpiundistort.h"
 #include "gstvpiupload.h"
 
@@ -49,6 +50,12 @@ vpi_init (GstPlugin * vpi)
   if (!gst_element_register (vpi, "vpiklttracker", GST_RANK_NONE,
           GST_TYPE_VPI_KLT_TRACKER)) {
     GST_ERROR ("Failed to register vpiklttracker");
+    goto out;
+  }
+
+  if (!gst_element_register (vpi, "vpioverlay", GST_RANK_NONE,
+          GST_TYPE_VPI_OVERLAY)) {
+    GST_ERROR ("Failed to register vpioverlay");
     goto out;
   }
 

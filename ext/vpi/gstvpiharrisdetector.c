@@ -232,7 +232,7 @@ static gboolean
 gst_vpi_harris_detector_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     GstVideoInfo * out_info)
 {
-  GstVpiHarrisDetector *self = GST_VPI_HARRIS_DETECTOR (filter);
+  GstVpiHarrisDetector *self = NULL;
   gboolean ret = TRUE;
   VPIStatus status = VPI_SUCCESS;
   guint width = 0;
@@ -241,6 +241,8 @@ gst_vpi_harris_detector_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);
   g_return_val_if_fail (out_info, FALSE);
+
+  self = GST_VPI_HARRIS_DETECTOR (filter);
 
   GST_DEBUG_OBJECT (self, "start");
 

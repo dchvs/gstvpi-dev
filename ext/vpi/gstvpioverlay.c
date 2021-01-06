@@ -26,6 +26,10 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_overlay_debug_category);
 #define VPI_OVERLAY_COLORS_ENUM (vpi_overlay_colors_enum_get_type ())
 GType vpi_overlay_colors_enum_get_type (void);
 
+#define KEYPOINT_OVERLAY "keypoint"
+#define BOX_BORDER_WIDTH 3
+#define BOUNDING_BOX_OVERLAY "boundingbox"
+
 #define BLACK 0
 #define WHITE 255
 
@@ -112,12 +116,123 @@ gst_vpi_overlay_init (GstVpiOverlay * self)
   self->color = DEFAULT_PROP_BOXES_COLOR;
 }
 
+static void
+gst_vpi_overlay_draw_boxes (GstVpiOverlay * self, VPIImage image, guint x,
+    guint y, guint w, guint h)
+{
+  VPIImageData vpi_image_data = { 0 };
+  guint8 *image_data = NULL;
+  guint stride = 0;
+  VPIImageFormat format = 0;
+  guint scale_f = 0;
+  guint i, j, i_aux, j_aux = 0;
+  guint color = DEFAULT_PROP_BOXES_COLOR;
+
+  g_return_if_fail (self);
+  g_return_if_fail (image);
+
+  GST_OBJECT_LOCK (self);
+  color = self->color;
+  GST_OBJECT_UNLOCK (self);
+
+  vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
+  /* Supported formats only have one plane */
+  stride = vpi_image_data.planes[0].pitchBytes;
+  format = vpi_image_data.type;
+  image_data = (guint8 *) vpi_image_data.planes[0].data;
+
+  /* To address both types with same pointer */
+  scale_f = (VPI_IMAGE_FORMAT_U8 == format) ? 1 : 2;
+
+  /* Top and bottom borders */
+  for (i = y; i < y + BOX_BORDER_WIDTH; i++) {
+    for (j = scale_f * x; j < scale_f * (x + w); j++) {
+      image_data[i * stride + j] = color;
+      i_aux = i + h - BOX_BORDER_WIDTH - 1;
+      image_data[i_aux * stride + j] = color;
+    }
+  }
+  /* Left and right borders (do not include corners that were already
+     covered by previous for) */
+  for (i = y + BOX_BORDER_WIDTH; i < y + h - BOX_BORDER_WIDTH; i++) {
+    for (j = scale_f * x; j < scale_f * (x + BOX_BORDER_WIDTH); j++) {
+      image_data[i * stride + j] = color;
+      j_aux = j + scale_f * (w - BOX_BORDER_WIDTH);
+      image_data[i * stride + j_aux] = color;
+    }
+  }
+  vpiImageUnlock (image);
+}
+
+static void
+gst_vpi_overlay_convert_keypoint_to_box (guint keypoint_x, guint keypoint_y,
+    guint image_width, guint image_height, guint * x, guint * y, guint * w,
+    guint * h)
+{
+  gint top, bottom, left, right = 0;
+
+  /* The points are drawn with an extra border to make them look like a box, 
+     but we have to watch for the image limits */
+  top = (keypoint_y >= BOX_BORDER_WIDTH) ? keypoint_y - BOX_BORDER_WIDTH : 0;
+  bottom =
+      (keypoint_y + BOX_BORDER_WIDTH <
+      image_height) ? keypoint_y + BOX_BORDER_WIDTH : image_height;
+  left = (keypoint_x >= BOX_BORDER_WIDTH) ? keypoint_x - BOX_BORDER_WIDTH : 0;
+  right =
+      (keypoint_x + BOX_BORDER_WIDTH <
+      image_width) ? keypoint_x + BOX_BORDER_WIDTH : image_width;
+
+  *x = left;
+  *y = top;
+  *w = right - left;
+  *h = bottom - top;
+}
+
+static void
+gst_vpi_overlay_process_meta_to_draw (GstVpiOverlay * self, VPIImage image,
+    GstVideoRegionOfInterestMeta * meta)
+{
+  VPIImageData vpi_image_data = { 0 };
+  guint x, y, w, h = 0;
+  guint image_width, image_height = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (image);
+  g_return_if_fail (meta);
+
+  /* If the overlay to draw is a keypoint, which means that it is just a pixel,
+     we need to modify it to give it some width and height and make it look 
+     like a tiny box */
+  if (g_quark_from_string (KEYPOINT_OVERLAY) == meta->roi_type) {
+    vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
+    image_width = vpi_image_data.planes[0].width;
+    image_height = vpi_image_data.planes[0].height;
+    vpiImageUnlock (image);
+
+    gst_vpi_overlay_convert_keypoint_to_box (meta->x, meta->y, image_width,
+        image_height, &x, &y, &w, &h);
+  } else if (g_quark_from_string (BOUNDING_BOX_OVERLAY) == meta->roi_type) {
+    x = meta->x;
+    y = meta->y;
+    w = meta->w;
+    h = meta->h;
+  } else {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Invalid region of interest meta type"), (NULL));
+    return;
+  }
+  gst_vpi_overlay_draw_boxes (self, image, x, y, w, h);
+}
+
 static GstFlowReturn
 gst_vpi_overlay_transform_image_ip (GstVpiFilter * filter,
     VPIStream stream, VpiFrame * frame)
 {
   GstVpiOverlay *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  gpointer state = NULL;
+  GstMeta *meta = NULL;
+  const GstMetaInfo *info = GST_VIDEO_REGION_OF_INTEREST_META_INFO;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -128,6 +243,13 @@ gst_vpi_overlay_transform_image_ip (GstVpiFilter * filter,
 
   GST_LOG_OBJECT (self, "Transform image ip");
 
+  while ((meta = gst_buffer_iterate_meta (frame->buffer, &state))) {
+    if (meta->info->api == info->api) {
+      GstVideoRegionOfInterestMeta *vmeta =
+          (GstVideoRegionOfInterestMeta *) meta;
+      gst_vpi_overlay_process_meta_to_draw (self, frame->image, vmeta);
+    }
+  }
   return ret;
 }
 

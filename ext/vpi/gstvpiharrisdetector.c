@@ -28,16 +28,13 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_harris_detector_debug_category);
 #define VPI_HARRIS_PARAMS_SIZE_ENUM (vpi_harris_params_size_enum_get_type ())
 GType vpi_harris_params_size_enum_get_type (void);
 
-#define VPI_COLORS_ENUM (vpi_colors_enum_get_type ())
-GType vpi_colors_enum_get_type (void);
-
 /* PVA backend only allows 8192 */
 #define VPI_ARRAY_CAPACITY 8192
-#define KEYPOINTS_BORDER 3
+
+/* To use with GstVideoRegionOfInterestMeta */
 #define KEYPOINTS_SIZE 0
-#define BLACK 0
-#define WHITE 255
 #define KEYPOINT_META_TYPE "keypoint"
+
 #define HARRIS_PARAMS_SIZE_3 3
 #define HARRIS_PARAMS_SIZE_5 5
 #define HARRIS_PARAMS_SIZE_7 7
@@ -54,8 +51,6 @@ GType vpi_colors_enum_get_type (void);
 #define DEFAULT_PROP_MIN_NMS_DISTANCE 8
 #define DEFAULT_PROP_SENSITIVITY 0.01
 #define DEFAULT_PROP_STRENGTH_THRESH 20
-#define DEFAULT_PROP_KEYPOINTS_COLOR BLACK
-#define DEFAULT_PROP_DRAW_KEYPOINTS TRUE
 
 struct _GstVpiHarrisDetector
 {
@@ -64,8 +59,6 @@ struct _GstVpiHarrisDetector
   VPIArray scores;
   VPIHarrisCornerDetectorParams harris_params;
   VPIPayload harris;
-  guint color;
-  gboolean draw_keypoints;
 };
 
 /* prototypes */
@@ -87,8 +80,6 @@ enum
   PROP_MIN_NMS_DISTANCE,
   PROP_SENSITIVITY,
   PROP_STRENGTH_THRESH,
-  PROP_KEYPOINTS_COLOR,
-  PROP_DRAW_KEYPOINTS
 };
 
 GType
@@ -110,25 +101,6 @@ vpi_harris_params_size_enum_get_type (void)
         g_enum_register_static ("VpiHarrisParamsSize", values);
   }
   return vpi_harris_params_size_enum_type;
-}
-
-GType
-vpi_colors_enum_get_type (void)
-{
-  static GType vpi_colors_enum_type = 0;
-  static const GEnumValue values[] = {
-    {BLACK, "Black color for keypoints",
-        "black"},
-    {WHITE, "White color por keypoints",
-        "white"},
-    {0, NULL, NULL}
-  };
-
-  if (!vpi_colors_enum_type) {
-    vpi_colors_enum_type =
-        g_enum_register_static ("VpiKeypointsColors", values);
-  }
-  return vpi_colors_enum_type;
 }
 
 /* class initialization */
@@ -200,18 +172,6 @@ gst_vpi_harris_detector_class_init (GstVpiHarrisDetectorClass * klass)
           DEFAULT_PROP_STRENGTH_THRESH_MIN, DEFAULT_PROP_STRENGTH_THRESH_MAX,
           DEFAULT_PROP_STRENGTH_THRESH,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-  g_object_class_install_property (gobject_class, PROP_KEYPOINTS_COLOR,
-      g_param_spec_enum ("color", "Keypoints color",
-          "Color to draw the keypoints.",
-          VPI_COLORS_ENUM, DEFAULT_PROP_KEYPOINTS_COLOR,
-          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-  g_object_class_install_property (gobject_class, PROP_DRAW_KEYPOINTS,
-      g_param_spec_boolean ("draw-keypoints", "Draw detected keypoints",
-          "Draw keypoints detected by the Harris corner detector.",
-          DEFAULT_PROP_DRAW_KEYPOINTS,
-          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -226,8 +186,6 @@ gst_vpi_harris_detector_init (GstVpiHarrisDetector * self)
   self->harris_params.sensitivity = DEFAULT_PROP_SENSITIVITY;
   /* PVA backend only allows 8 */
   self->harris_params.minNMSDistance = DEFAULT_PROP_MIN_NMS_DISTANCE;
-  self->color = DEFAULT_PROP_KEYPOINTS_COLOR;
-  self->draw_keypoints = DEFAULT_PROP_DRAW_KEYPOINTS;
 }
 
 static gboolean
@@ -298,58 +256,6 @@ out:
 }
 
 static void
-gst_vpi_harris_detector_draw_keypoints (GstVpiHarrisDetector * self,
-    VPIImage image)
-{
-  VPIArrayData out_keypoints_data = { 0 };
-  VPIKeypoint *out_keypoints = NULL;
-  VPIImageData vpi_image_data = { 0 };
-  guint8 *image_data = NULL;
-  guint stride = 0;
-  guint k, i, j = 0;
-  guint x, y = 0;
-  guint color = DEFAULT_PROP_KEYPOINTS_COLOR;
-  gint width, height = 0;
-  gint top, bottom, left, right = 0;
-
-  g_return_if_fail (self);
-  g_return_if_fail (image);
-
-  GST_OBJECT_LOCK (self);
-  color = self->color;
-  GST_OBJECT_UNLOCK (self);
-
-  vpiImageLock (image, VPI_LOCK_READ_WRITE, &vpi_image_data);
-
-  /* Supported format only have one plane */
-  stride = vpi_image_data.planes[0].pitchBytes;
-  width = vpi_image_data.planes[0].width;
-  height = vpi_image_data.planes[0].height;
-  image_data = (guint8 *) vpi_image_data.planes[0].data;
-
-  vpiArrayLock (self->keypoints, VPI_LOCK_READ, &out_keypoints_data);
-  out_keypoints = (VPIKeypoint *) out_keypoints_data.data;
-  vpiArrayUnlock (self->keypoints);
-
-  for (k = 0; k < out_keypoints_data.size; k++) {
-    x = (guint) out_keypoints[k].x;
-    y = (guint) out_keypoints[k].y;
-    /* The points are drawn with an extra border to make them bigger, but we
-       have to watch for the image limits */
-    top = (y >= KEYPOINTS_BORDER) ? y - KEYPOINTS_BORDER : 0;
-    bottom = (y + KEYPOINTS_BORDER < height) ? y + KEYPOINTS_BORDER : height;
-    left = (x >= KEYPOINTS_BORDER) ? x - KEYPOINTS_BORDER : 0;
-    right = (x + KEYPOINTS_BORDER < width) ? x + KEYPOINTS_BORDER : width;
-    for (i = top; i < bottom; i++) {
-      for (j = left; j < right; j++) {
-        image_data[i * stride + j] = color;
-      }
-    }
-  }
-  vpiImageUnlock (image);
-}
-
-static void
 gst_vpi_harris_detector_add_keypoints_meta (GstVpiHarrisDetector * self,
     GstBuffer * buffer)
 {
@@ -399,9 +305,6 @@ gst_vpi_harris_detector_transform_image_ip (GstVpiFilter * filter,
       self->keypoints, self->scores, &params);
   vpiStreamSync (stream);
 
-  if (self->draw_keypoints) {
-    gst_vpi_harris_detector_draw_keypoints (self, frame->image);
-  }
   gst_vpi_harris_detector_add_keypoints_meta (self, frame->buffer);
 
   return ret;
@@ -433,12 +336,6 @@ gst_vpi_harris_detector_set_property (GObject * object, guint property_id,
       break;
     case PROP_STRENGTH_THRESH:
       self->harris_params.strengthThresh = g_value_get_double (value);
-      break;
-    case PROP_KEYPOINTS_COLOR:
-      self->color = g_value_get_enum (value);
-      break;
-    case PROP_DRAW_KEYPOINTS:
-      self->draw_keypoints = g_value_get_boolean (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -473,12 +370,6 @@ gst_vpi_harris_detector_get_property (GObject * object, guint property_id,
       break;
     case PROP_STRENGTH_THRESH:
       g_value_set_double (value, self->harris_params.strengthThresh);
-      break;
-    case PROP_KEYPOINTS_COLOR:
-      g_value_set_enum (value, self->color);
-      break;
-    case PROP_DRAW_KEYPOINTS:
-      g_value_set_boolean (value, self->draw_keypoints);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

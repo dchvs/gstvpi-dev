@@ -51,25 +51,29 @@ gst_vpi_meta_get_info (void)
 GstVpiMeta *
 gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 {
-  GstVpiMeta *ret = NULL;
-  GstMapInfo minfo;
-  VPIImageData vpi_image_data;
-  VPIStatus status;
+  GstVpiMeta *self = NULL;
+  VPIImageData vpi_image_data = { 0 };
+  GstMapInfo minfo = GST_MAP_INFO_INIT;
+  VPIStatus status = VPI_SUCCESS;
+  gint i = 0;
 
   g_return_val_if_fail (buffer, NULL);
   g_return_val_if_fail (video_info, NULL);
 
-  GST_LOG ("Adding VPI meta to buffer %p", buffer);
+  GST_LOG ("Adding VPI meta to buffer %" GST_PTR_FORMAT, buffer);
 
+  self = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
+
+  /* Can't save a reference or upstream element will find the buffer
+     non-writable */
+  self->vpi_frame.buffer = buffer;
   gst_buffer_map (buffer, &minfo, GST_MAP_READ);
 
-  ret = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
-
-  memset (&(vpi_image_data), 0, sizeof (vpi_image_data));
   vpi_image_data.type =
       gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (video_info));
   vpi_image_data.numPlanes = GST_VIDEO_INFO_N_PLANES (video_info);
-  for (int i = 0; i < vpi_image_data.numPlanes; i++) {
+
+  for (i = 0; i < vpi_image_data.numPlanes; i++) {
     vpi_image_data.planes[i].width =
         GST_VIDEO_SUB_SCALE (video_info->finfo->w_sub[i],
         GST_VIDEO_INFO_WIDTH (video_info));
@@ -82,29 +86,36 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
         minfo.data + GST_VIDEO_INFO_PLANE_OFFSET (video_info, i);
   }
 
-  ret->vpi_frame.buffer = buffer;
+  gst_buffer_unmap (buffer, &minfo);
+
   status = vpiImageCreateCudaMemWrapper (&vpi_image_data, VPI_BACKEND_ALL,
-      &(ret->vpi_frame.image));
+      &(self->vpi_frame.image));
   if (VPI_SUCCESS != status) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
-    ret = NULL;
+    self = NULL;
   }
 
-  return ret;
+  return self;
 }
 
 static gboolean
 gst_vpi_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
 {
-  /* Gst requires this func to be implemented, even if it is empty */
+  GstVpiMeta *self = (GstVpiMeta *) meta;
+
+  self->vpi_frame = (VpiFrame) {
+  0};
+
   return TRUE;
 }
 
 static void
 gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
 {
-  GstVpiMeta *vpi_meta = (GstVpiMeta *) meta;
+  GstVpiMeta *self = (GstVpiMeta *) meta;
 
-  vpiImageDestroy (vpi_meta->vpi_frame.image);
-  vpi_meta->vpi_frame.image = NULL;
+  vpiImageDestroy (self->vpi_frame.image);
+  self->vpi_frame.image = NULL;
+
+  self->vpi_frame.buffer = NULL;
 }

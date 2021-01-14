@@ -61,7 +61,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
 
   GST_LOG ("Adding VPI meta to buffer %p", buffer);
 
-  gst_buffer_map (buffer, &minfo, GST_MAP_READWRITE);
+  gst_buffer_map (buffer, &minfo, GST_MAP_READ);
 
   ret = (GstVpiMeta *) gst_buffer_add_meta (buffer, GST_VPI_META_INFO, NULL);
 

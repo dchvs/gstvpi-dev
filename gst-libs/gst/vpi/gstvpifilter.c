@@ -115,6 +115,7 @@ gst_vpi_filter_start (GstBaseTransform * trans)
 
   if (vpi_filter_class->transform_image_ip) {
     gst_base_transform_set_in_place (trans, TRUE);
+    gst_base_transform_set_passthrough (trans, TRUE);
   }
 
   cuda_status = cudaStreamCreate (&priv->cuda_stream);

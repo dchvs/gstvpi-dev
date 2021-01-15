@@ -312,9 +312,7 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
           GST_VPI_META_API_TYPE));
 
   if (vpi_meta) {
-
-    frame->buffer = gst_buffer_make_writable (frame->buffer);
-    gst_buffer_map (frame->buffer, &minfo, GST_MAP_READWRITE);
+    gst_buffer_map (frame->buffer, &minfo, GST_MAP_READ);
 
     gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream, minfo.data,
         cudaMemAttachSingle);

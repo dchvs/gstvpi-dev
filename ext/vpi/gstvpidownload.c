@@ -105,7 +105,7 @@ gst_vpi_download_transform_upstream_caps (GstVpiDownload * self,
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  vpi_image = gst_caps_copy (caps_src);
+  vpi_image = caps_src;
   vpi_image_feature = gst_caps_features_from_string ("memory:VPIImage");
 
   for (i = 0; i < gst_caps_get_size (vpi_image); i++) {

@@ -21,6 +21,11 @@ static gboolean gst_vpi_meta_transform (GstBuffer * transbuf,
     GstMeta * meta, GstBuffer * buffer, GQuark type, gpointer data);
 static gboolean gst_vpi_meta_copy (GstVpiMeta * dst, GstVpiMeta * src);
 
+static void gst_vpi_image_free (gpointer data);
+
+#define VPI_IMAGE_QUARK_STR "VPIImage"
+static GQuark _vpi_image_quark;
+
 GType
 gst_vpi_meta_api_get_type (void)
 {
@@ -46,9 +51,22 @@ gst_vpi_meta_get_info (void)
         gst_vpi_meta_init,
         gst_vpi_meta_free,
         gst_vpi_meta_transform);
+
+    _vpi_image_quark = g_quark_from_static_string (VPI_IMAGE_QUARK_STR);
+
     g_once_init_leave (&info, meta);
   }
   return info;
+}
+
+static void
+gst_vpi_image_free (gpointer data)
+{
+  VPIImage image = (VPIImage) data;
+
+  GST_INFO ("Freeing VPI image %p", image);
+
+  vpiImageDestroy (image);
 }
 
 GstVpiMeta *
@@ -59,6 +77,7 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
   GstMapInfo minfo = GST_MAP_INFO_INIT;
   VPIStatus status = VPI_SUCCESS;
   gint i = 0;
+  GstMemory *mem = NULL;
 
   g_return_val_if_fail (buffer, NULL);
   g_return_val_if_fail (video_info, NULL);
@@ -98,6 +117,16 @@ gst_buffer_add_vpi_meta (GstBuffer * buffer, GstVideoInfo * video_info)
     self = NULL;
   }
 
+  /* Associate the VPIImage to the memory, so it only gets destroyed
+     when the underlying memory is destroyed. This will allow us to
+     share images with different buffers that share the same memory,
+     without worrying of an early free.
+   */
+  mem = gst_buffer_get_all_memory (buffer);
+  gst_mini_object_set_qdata (GST_MINI_OBJECT_CAST (mem), _vpi_image_quark,
+      self->vpi_frame.image, gst_vpi_image_free);
+  gst_memory_unref (mem);
+
   return self;
 }
 
@@ -118,7 +147,8 @@ gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
 {
   GstVpiMeta *self = (GstVpiMeta *) meta;
 
-  vpiImageDestroy (self->vpi_frame.image);
+  /* We don't need to free the Image, since its now associated to the
+     memory and will be freed when that is no longer used */
   self->vpi_frame.image = NULL;
 
   self->vpi_frame.buffer = NULL;

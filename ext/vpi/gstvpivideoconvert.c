@@ -55,6 +55,8 @@ struct _GstVpiVideoConvert
   GstVpiFilter parent;
 
   gint conversion_policy;
+  gfloat scale;
+  gfloat offset;
 };
 
 /* prototypes */
@@ -71,9 +73,19 @@ enum
 {
   PROP_0,
   PROP_CONVERSION_POLICY,
+  PROP_SCALE,
+  PROP_OFFSET,
 };
 
 #define PROP_CONVERSION_POLICY_DEFAULT VPI_CONVERSION_CLAMP
+
+#define PROP_SCALE_DEFAULT 1.0f
+#define PROP_SCALE_MIN -G_MAXFLOAT
+#define PROP_SCALE_MAX G_MAXFLOAT
+
+#define PROP_OFFSET_DEFAULT 0.0f
+#define PROP_OFFSET_MIN -G_MAXFLOAT
+#define PROP_OFFSET_MAX G_MAXFLOAT
 
 /* class initialization */
 
@@ -114,6 +126,18 @@ gst_vpi_video_convert_class_init (GstVpiVideoConvertClass * klass)
           VPI_CONVERSION_POLICY_ENUM, PROP_CONVERSION_POLICY_DEFAULT,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property (gobject_class, PROP_SCALE,
+      g_param_spec_float ("scale", "Range Scale",
+          "Factor on which to scale the conversion. Useful for type conversions.",
+          PROP_SCALE_MIN, PROP_SCALE_MAX, PROP_SCALE_DEFAULT,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_OFFSET,
+      g_param_spec_float ("offset", "Range Offset",
+          "Offset to add to the conversion. Useful for type conversions.",
+          PROP_OFFSET_MIN, PROP_OFFSET_MAX, PROP_OFFSET_DEFAULT,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   /* Disable any sort of processing if input/output caps are equal */
   bt_class->passthrough_on_same_caps = TRUE;
   bt_class->transform_ip_on_passthrough = FALSE;
@@ -123,6 +147,8 @@ static void
 gst_vpi_video_convert_init (GstVpiVideoConvert * self)
 {
   self->conversion_policy = PROP_CONVERSION_POLICY_DEFAULT;
+  self->scale = PROP_SCALE_DEFAULT;
+  self->offset = PROP_OFFSET_DEFAULT;
 }
 
 static GstFlowReturn
@@ -133,6 +159,8 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
   gint conversion_policy = -1;
+  gfloat scale = 1;
+  gfloat offset = 0;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -147,11 +175,13 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
 
   GST_OBJECT_LOCK (self);
   conversion_policy = self->conversion_policy;
+  scale = self->scale;
+  offset = self->offset;
   GST_OBJECT_UNLOCK (self);
 
   status =
       vpiSubmitConvertImageFormat (stream, VPI_BACKEND_CUDA, in_frame->image,
-      out_frame->image, conversion_policy, 1, 0);
+      out_frame->image, conversion_policy, scale, offset);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -176,6 +206,12 @@ gst_vpi_video_convert_set_property (GObject * object, guint property_id,
     case PROP_CONVERSION_POLICY:
       self->conversion_policy = g_value_get_enum (value);
       break;
+    case PROP_SCALE:
+      self->scale = g_value_get_float (value);
+      break;
+    case PROP_OFFSET:
+      self->offset = g_value_get_float (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -195,6 +231,12 @@ gst_vpi_video_convert_get_property (GObject * object, guint property_id,
   switch (property_id) {
     case PROP_CONVERSION_POLICY:
       g_value_set_enum (value, self->conversion_policy);
+      break;
+    case PROP_SCALE:
+      g_value_set_float (value, self->scale);
+      break;
+    case PROP_OFFSET:
+      g_value_set_float (value, self->offset);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

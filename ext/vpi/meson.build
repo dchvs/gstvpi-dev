@@ -7,7 +7,8 @@ gst_plugin_sources = [
   'gstvpiklttracker.c',
   'gstvpioverlay.c',
   'gstvpiundistort.c',
-  'gstvpiupload.c'
+  'gstvpiupload.c',
+  'gstvpivideoconvert.c'
 ]
 
 gst_plugin_headers = [
@@ -17,7 +18,8 @@ gst_plugin_headers = [
   'gstvpiklttracker.h',
   'gstvpioverlay.h',
   'gstvpiundistort.h',
-  'gstvpiupload.h'
+  'gstvpiupload.h',
+  'gstvpivideoconvert.h'
 ]
 
 # Build plugin library

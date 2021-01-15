@@ -23,6 +23,7 @@
 #include "gstvpioverlay.h"
 #include "gstvpiundistort.h"
 #include "gstvpiupload.h"
+#include "gstvpivideoconvert.h"
 
 static gboolean
 vpi_init (GstPlugin * vpi)
@@ -68,6 +69,12 @@ vpi_init (GstPlugin * vpi)
   if (!gst_element_register (vpi, "vpiupload", GST_RANK_NONE,
           GST_TYPE_VPI_UPLOAD)) {
     GST_ERROR ("Failed to register vpiupload");
+    goto out;
+  }
+
+  if (!gst_element_register (vpi, "vpivideoconvert", GST_RANK_NONE,
+          GST_TYPE_VPI_VIDEO_CONVERT)) {
+    GST_ERROR ("Failed to register vpivideoconvert");
     goto out;
   }
 

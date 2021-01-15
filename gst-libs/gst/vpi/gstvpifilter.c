@@ -228,8 +228,6 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  GstMapInfo in_minfo = GST_MAP_INFO_INIT;
-  GstMapInfo out_minfo = GST_MAP_INFO_INIT;
 
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);
@@ -252,13 +250,10 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   if (in_vpi_meta && out_vpi_meta) {
 
-    gst_buffer_map (inframe->buffer, &in_minfo, GST_MAP_READ);
-    gst_buffer_map (outframe->buffer, &out_minfo, GST_MAP_READWRITE);
-
-    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream, in_minfo.data,
-        cudaMemAttachSingle);
     gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
-        out_minfo.data, cudaMemAttachSingle);
+        inframe->map->data, cudaMemAttachSingle);
+    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
+        outframe->map->data, cudaMemAttachSingle);
 
     ret = vpi_filter_class->transform_image (self, priv->vpi_stream,
         &in_vpi_meta->vpi_frame, &out_vpi_meta->vpi_frame);
@@ -266,13 +261,10 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     vpiStreamSync (priv->vpi_stream);
 
     /* Attach memory to global stream to detach it from CUDA stream */
-    gst_vpi_filter_attach_mem_to_stream (self, NULL, in_minfo.data,
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, inframe->map->data,
         cudaMemAttachHost);
-    gst_vpi_filter_attach_mem_to_stream (self, NULL, out_minfo.data,
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, outframe->map->data,
         cudaMemAttachHost);
-
-    gst_buffer_unmap (inframe->buffer, &in_minfo);
-    gst_buffer_unmap (outframe->buffer, &out_minfo);
 
     if (GST_FLOW_OK != ret) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

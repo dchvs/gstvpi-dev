@@ -16,6 +16,7 @@
 
 static const gchar *test_pipes[] = {
   "videotestsrc ! video/x-raw,format=BGR ! vpiupload ! vpivideoconvert ! vpidownload ! video/x-raw,format=RGB ! fakesink",
+  "videotestsrc ! video/x-raw,format=BGR,width=320,height=240 ! vpiupload ! vpivideoconvert ! vpidownload ! video/x-raw,format=RGB,width=640,height=480 ! fakesink",
   NULL,
 };
 
@@ -23,6 +24,7 @@ enum
 {
   /* test names */
   TEST_PLAYING_TO_NULL_MULTIPLE_TIMES,
+  TEST_BLOCK_RESOLUTION_CHANGE,
 };
 
 GST_START_TEST (test_playing_to_null_multiple_times)
@@ -66,6 +68,25 @@ GST_START_TEST (test_bypass_on_same_caps)
 
 GST_END_TEST;
 
+GST_START_TEST (test_block_resolution_change)
+{
+  GstElement *pipeline = NULL;
+  GError *error = NULL;
+
+  pipeline =
+      gst_parse_launch (test_pipes[TEST_BLOCK_RESOLUTION_CHANGE], &error);
+
+  GST_ERROR ("%d", error->code);
+
+  /* Check for errors creating pipeline */
+  fail_if (error == NULL);
+  assert_equals_int (3, error->code);
+
+  gst_object_unref (pipeline);
+}
+
+GST_END_TEST;
+
 static Suite *
 gst_vpi_video_convert_suite (void)
 {
@@ -75,6 +96,7 @@ gst_vpi_video_convert_suite (void)
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_playing_to_null_multiple_times);
   tcase_add_test (tc, test_bypass_on_same_caps);
+  tcase_add_test (tc, test_block_resolution_change);
 
   return suite;
 }

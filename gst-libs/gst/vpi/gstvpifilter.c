@@ -241,6 +241,8 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
       GstVpiFilterPrivate);
 
+  g_return_val_if_fail (vpi_filter_class->transform_image, GST_FLOW_ERROR);
+
   in_vpi_meta =
       ((GstVpiMeta *) gst_buffer_get_meta (inframe->buffer,
           GST_VPI_META_API_TYPE));
@@ -303,6 +305,8 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
   vpi_filter_class = GST_VPI_FILTER_GET_CLASS (self);
   priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
       GstVpiFilterPrivate);
+
+  g_return_val_if_fail (vpi_filter_class->transform_image_ip, GST_FLOW_ERROR);
 
   vpi_meta =
       ((GstVpiMeta *) gst_buffer_get_meta (frame->buffer,

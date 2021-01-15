@@ -483,7 +483,7 @@ gst_vpi_filter_prepare_output_buffer (GstBaseTransform * trans,
   GstVpiFilterClass *klass = GST_VPI_FILTER_GET_CLASS (trans);
   GstFlowReturn ret = GST_FLOW_ERROR;
 
-  if (klass->transform_image_ip) {
+  if (klass->transform_image_ip && gst_base_transform_is_passthrough (trans)) {
     ret = gst_vpi_filter_prepare_output_buffer_ip (trans, input, outbuf);
   } else {
     ret =

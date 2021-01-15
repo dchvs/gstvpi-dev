@@ -19,8 +19,6 @@
 #include <gst/gst.h>
 #include <vpi/algo/ConvertImageFormat.h>
 
-#include <math.h>
-
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_video_convert_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_video_convert_debug_category
 

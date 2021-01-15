@@ -81,6 +81,10 @@ gst_vpi_video_convert_class_init (GstVpiVideoConvertClass * klass)
       GST_DEBUG_FUNCPTR (gst_vpi_video_convert_transform_caps);
   gobject_class->set_property = gst_vpi_video_convert_set_property;
   gobject_class->get_property = gst_vpi_video_convert_get_property;
+
+  /* Disable any sort of processing if input/output caps are equal */
+  bt_class->passthrough_on_same_caps = TRUE;
+  bt_class->transform_ip_on_passthrough = FALSE;
 }
 
 static void

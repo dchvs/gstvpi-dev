@@ -114,6 +114,8 @@ static void
 gst_vpi_overlay_init (GstVpiOverlay * self)
 {
   self->color = DEFAULT_PROP_BOXES_COLOR;
+
+  gst_base_transform_set_passthrough (GST_BASE_TRANSFORM (self), FALSE);
 }
 
 static void

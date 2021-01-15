@@ -17,6 +17,9 @@
 static gboolean gst_vpi_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
 static void gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer);
+static gboolean gst_vpi_meta_transform (GstBuffer * transbuf,
+    GstMeta * meta, GstBuffer * buffer, GQuark type, gpointer data);
+static gboolean gst_vpi_meta_copy (GstVpiMeta * dst, GstVpiMeta * src);
 
 GType
 gst_vpi_meta_api_get_type (void)
@@ -42,7 +45,7 @@ gst_vpi_meta_get_info (void)
         sizeof (GstVpiMeta),
         gst_vpi_meta_init,
         gst_vpi_meta_free,
-        NULL);
+        gst_vpi_meta_transform);
     g_once_init_leave (&info, meta);
   }
   return info;
@@ -119,4 +122,33 @@ gst_vpi_meta_free (GstMeta * meta, GstBuffer * buffer)
   self->vpi_frame.image = NULL;
 
   self->vpi_frame.buffer = NULL;
+}
+
+static gboolean
+gst_vpi_meta_copy (GstVpiMeta * dst, GstVpiMeta * src)
+{
+  g_return_val_if_fail (dst, FALSE);
+  g_return_val_if_fail (src, FALSE);
+
+  *dst = *src;
+
+  return TRUE;
+}
+
+static gboolean
+gst_vpi_meta_transform (GstBuffer * dest,
+    GstMeta * meta, GstBuffer * buffer, GQuark type, gpointer data)
+{
+  GstVpiMeta *newmeta = NULL;
+  gboolean ret = FALSE;
+
+  /* TODO: actually care about the transformation type. I.e.: if it's
+     a scaling, we might want to adjust bounding boxes, etc...
+   */
+  newmeta = (GstVpiMeta *) gst_buffer_add_meta (dest, GST_VPI_META_INFO, NULL);
+
+  ret = gst_vpi_meta_copy (newmeta, (GstVpiMeta *) meta);
+  newmeta->vpi_frame.buffer = dest;
+
+  return ret;
 }

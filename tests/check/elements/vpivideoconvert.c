@@ -10,6 +10,8 @@
  * back to RidgeRun without any encumbrance.
  */
 
+#include <gst/check/gstharness.h>
+
 #include "tests/check/test_utils.h"
 
 static const gchar *test_pipes[] = {
@@ -30,6 +32,40 @@ GST_START_TEST (test_playing_to_null_multiple_times)
 
 GST_END_TEST;
 
+GST_START_TEST (test_bypass_on_same_caps)
+{
+  GstHarness *h;
+  GstBuffer *in_buf;
+  GstBuffer *out_buf;
+  const gchar *caps =
+      "video/x-raw(memory:VPIImage),format=GRAY8,width=320,height=240,framerate=30/1";
+  const gsize size = 320 * 240;
+
+  h = gst_harness_new ("vpivideoconvert");
+
+  /* Define caps */
+  gst_harness_set_src_caps_str (h, caps);
+  gst_harness_set_sink_caps_str (h, caps);
+
+  /* Create a dummy buffer */
+  in_buf = gst_harness_create_buffer (h, size);
+
+  /* Push the buffer */
+  gst_harness_push (h, in_buf);
+
+  /* Pull out the buffer */
+  out_buf = gst_harness_pull (h);
+
+  /* validate the buffer in is the same as buffer out */
+  fail_unless (in_buf == out_buf);
+
+  /* cleanup */
+  gst_buffer_unref (out_buf);
+  gst_harness_teardown (h);
+}
+
+GST_END_TEST;
+
 static Suite *
 gst_vpi_video_convert_suite (void)
 {
@@ -38,6 +74,7 @@ gst_vpi_video_convert_suite (void)
 
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_playing_to_null_multiple_times);
+  tcase_add_test (tc, test_bypass_on_same_caps);
 
   return suite;
 }

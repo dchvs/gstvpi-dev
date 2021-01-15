@@ -81,7 +81,8 @@ gst_vpi_buffer_pool_add_meta (GstCudaBufferPool * cuda_pool, GstBuffer * buffer)
 {
   GstVpiBufferPool *self = GST_VPI_BUFFER_POOL (cuda_pool);
 
-  GST_INFO_OBJECT (self, "Adding VPI meta to the buffer");
+  GST_INFO_OBJECT (self, "Adding VPI meta to the buffer %" GST_PTR_FORMAT,
+      buffer);
 
   if (gst_buffer_add_vpi_meta (buffer, &(self->video_info)) == NULL) {
     GST_ERROR_OBJECT (self, "Failed to add VpiMeta to buffer.");

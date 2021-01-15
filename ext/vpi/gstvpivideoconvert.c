@@ -26,14 +26,40 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_video_convert_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_LE, NV12, RGB, BGR, RGBA, BGRA, RGBx, BGRx }")
 
+#define VPI_CONVERSION_POLICY_ENUM (vpi_conversion_policy_enum_get_type ())
+GType vpi_conversion_policy_enum_get_type (void);
+
+GType
+vpi_conversion_policy_enum_get_type (void)
+{
+  static GType vpi_conversion_policy_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_CONVERSION_CAST, "Casts input to the output type. Overflows "
+          "and underflows are handled as per C specification, including "
+          "situations of undefined behavior.", "cast"},
+    {VPI_CONVERSION_CLAMP, "Clamps input to output's type range. Overflows "
+          "and underflows are mapped to the output type's maximum and minimum "
+          "representable value, respectively. When output type is floating point, "
+          "clamp behaves like cast.", "clamp"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_conversion_policy_enum_type) {
+    vpi_conversion_policy_enum_type =
+        g_enum_register_static ("VpiConversionPolicy", values);
+  }
+
+  return vpi_conversion_policy_enum_type;
+}
+
 struct _GstVpiVideoConvert
 {
   GstVpiFilter parent;
+
+  gint conversion_policy;
 };
 
 /* prototypes */
-static gboolean gst_vpi_video_convert_start (GstVpiFilter * filter,
-    GstVideoInfo * in_info, GstVideoInfo * out_info);
 static GstFlowReturn gst_vpi_video_convert_transform_image (GstVpiFilter *
     filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
 static void gst_vpi_video_convert_set_property (GObject * object,
@@ -46,7 +72,10 @@ static GstCaps *gst_vpi_video_convert_transform_caps (GstBaseTransform * trans,
 enum
 {
   PROP_0,
+  PROP_CONVERSION_POLICY,
 };
+
+#define PROP_CONVERSION_POLICY_DEFAULT VPI_CONVERSION_CLAMP
 
 /* class initialization */
 
@@ -74,13 +103,18 @@ gst_vpi_video_convert_class_init (GstVpiVideoConvertClass * klass)
       "Converts video from one colorspace to another using VPI",
       "Michael Gruner <michael.gruner@ridgerun.com>");
 
-  vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_video_convert_start);
   vpi_filter_class->transform_image =
       GST_DEBUG_FUNCPTR (gst_vpi_video_convert_transform_image);
   bt_class->transform_caps =
       GST_DEBUG_FUNCPTR (gst_vpi_video_convert_transform_caps);
   gobject_class->set_property = gst_vpi_video_convert_set_property;
   gobject_class->get_property = gst_vpi_video_convert_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_CONVERSION_POLICY,
+      g_param_spec_enum ("conversion-policy", "Conversion Policy",
+          "Policy used when converting between image types.",
+          VPI_CONVERSION_POLICY_ENUM, PROP_CONVERSION_POLICY_DEFAULT,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   /* Disable any sort of processing if input/output caps are equal */
   bt_class->passthrough_on_same_caps = TRUE;
@@ -90,27 +124,8 @@ gst_vpi_video_convert_class_init (GstVpiVideoConvertClass * klass)
 static void
 gst_vpi_video_convert_init (GstVpiVideoConvert * self)
 {
-
+  self->conversion_policy = PROP_CONVERSION_POLICY_DEFAULT;
 }
-
-static gboolean
-gst_vpi_video_convert_start (GstVpiFilter * filter, GstVideoInfo * in_info,
-    GstVideoInfo * out_info)
-{
-  GstVpiVideoConvert *self = NULL;
-  gboolean ret = TRUE;
-
-  g_return_val_if_fail (filter, FALSE);
-  g_return_val_if_fail (in_info, FALSE);
-  g_return_val_if_fail (out_info, FALSE);
-
-  self = GST_VPI_VIDEO_CONVERT (filter);
-
-  GST_DEBUG_OBJECT (self, "start");
-
-  return ret;
-}
-
 
 static GstFlowReturn
 gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
@@ -119,6 +134,7 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
   GstVpiVideoConvert *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  gint conversion_policy = -1;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -131,9 +147,13 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
 
   GST_LOG_OBJECT (self, "Transform image");
 
+  GST_OBJECT_LOCK (self);
+  conversion_policy = self->conversion_policy;
+  GST_OBJECT_UNLOCK (self);
+
   status =
       vpiSubmitConvertImageFormat (stream, VPI_BACKEND_CUDA, in_frame->image,
-      out_frame->image, VPI_CONVERSION_CLAMP, 1, 0);
+      out_frame->image, conversion_policy, 1, 0);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -155,6 +175,9 @@ gst_vpi_video_convert_set_property (GObject * object, guint property_id,
 
   GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_CONVERSION_POLICY:
+      self->conversion_policy = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -172,6 +195,9 @@ gst_vpi_video_convert_get_property (GObject * object, guint property_id,
 
   GST_OBJECT_LOCK (self);
   switch (property_id) {
+    case PROP_CONVERSION_POLICY:
+      g_value_set_enum (value, self->conversion_policy);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;

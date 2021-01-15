@@ -25,6 +25,28 @@
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_filter_debug_category
 
+#define VPI_BACKEND_ENUM (vpi_backend_enum_get_type ())
+GType vpi_backend_enum_get_type (void);
+
+GType
+vpi_backend_enum_get_type (void)
+{
+  static GType vpi_backend_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_BACKEND_CPU, "CPU Backend", "cpu"},
+    {VPI_BACKEND_CUDA, "CUDA Backend", "cuda"},
+    {VPI_BACKEND_PVA, "PVA Backend (Xavier only)", "pva"},
+    {VPI_BACKEND_VIC, "VIC Backend", "vic"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_backend_enum_type) {
+    vpi_backend_enum_type = g_enum_register_static ("VpiBackend", values);
+  }
+
+  return vpi_backend_enum_type;
+}
+
 typedef struct _GstVpiFilterPrivate GstVpiFilterPrivate;
 
 struct _GstVpiFilterPrivate
@@ -32,6 +54,7 @@ struct _GstVpiFilterPrivate
   GstVpiBufferPool *downstream_buffer_pool;
   VPIStream vpi_stream;
   cudaStream_t cuda_stream;
+  gint backend;
 };
 
 static GstFlowReturn gst_vpi_filter_transform_frame (GstVideoFilter * filter,
@@ -49,11 +72,18 @@ static GstFlowReturn gst_vpi_filter_prepare_output_buffer (GstBaseTransform *
 static GstFlowReturn gst_vpi_filter_prepare_output_buffer_ip (GstBaseTransform *
     trans, GstBuffer * input, GstBuffer ** outbuf);
 static void gst_vpi_filter_finalize (GObject * object);
+static void gst_vpi_filter_set_property (GObject * object,
+    guint property_id, const GValue * value, GParamSpec * pspec);
+static void gst_vpi_filter_get_property (GObject * object,
+    guint property_id, GValue * value, GParamSpec * pspec);
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_BACKEND,
 };
+
+#define PROP_BACKEND_DEFAULT VPI_BACKEND_CUDA
 
 /* class initialization */
 G_DEFINE_TYPE_WITH_CODE (GstVpiFilter, gst_vpi_filter, GST_TYPE_VIDEO_FILTER,
@@ -82,6 +112,14 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
   base_transform_class->prepare_output_buffer =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_prepare_output_buffer);
   gobject_class->finalize = gst_vpi_filter_finalize;
+  gobject_class->set_property = gst_vpi_filter_set_property;
+  gobject_class->get_property = gst_vpi_filter_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_BACKEND,
+      g_param_spec_enum ("backend", "VPI Backend",
+          "Backend to use to execute VPI algorithms.",
+          VPI_BACKEND_ENUM, PROP_BACKEND_DEFAULT,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -94,6 +132,7 @@ gst_vpi_filter_init (GstVpiFilter * self)
   priv->downstream_buffer_pool = NULL;
   priv->vpi_stream = NULL;
   priv->cuda_stream = NULL;
+  priv->backend = PROP_BACKEND_DEFAULT;
 }
 
 static gboolean
@@ -502,4 +541,68 @@ gst_vpi_filter_finalize (GObject * object)
   g_clear_object (&priv->downstream_buffer_pool);
 
   G_OBJECT_CLASS (gst_vpi_filter_parent_class)->finalize (object);
+}
+
+static void
+gst_vpi_filter_set_property (GObject * object, guint property_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (object);
+  GstVpiFilterPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
+
+  GST_DEBUG_OBJECT (self, "set_property");
+
+  GST_OBJECT_LOCK (self);
+  switch (property_id) {
+    case PROP_BACKEND:
+      priv->backend = g_value_get_enum (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
+  }
+  GST_OBJECT_UNLOCK (self);
+}
+
+static void
+gst_vpi_filter_get_property (GObject * object, guint property_id,
+    GValue * value, GParamSpec * pspec)
+{
+  GstVpiFilter *self = GST_VPI_FILTER (object);
+  GstVpiFilterPrivate *priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
+
+  GST_DEBUG_OBJECT (self, "get_property");
+
+  GST_OBJECT_LOCK (self);
+  switch (property_id) {
+    case PROP_BACKEND:
+      g_value_set_enum (value, priv->backend);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
+      break;
+  }
+  GST_OBJECT_UNLOCK (self);
+}
+
+VPIBackend
+gst_vpi_filter_get_backend (GstVpiFilter * self)
+{
+  GstVpiFilterPrivate *priv = NULL;
+  VPIBackend backend = VPI_BACKEND_INVALID;
+
+  g_return_val_if_fail (self, backend);
+
+  priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_FILTER,
+      GstVpiFilterPrivate);
+
+  GST_OBJECT_LOCK (self);
+  backend = priv->backend;
+  GST_OBJECT_UNLOCK (self);
+
+  return backend;
 }

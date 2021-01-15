@@ -38,6 +38,8 @@ struct _GstVpiFilterClass
                                        VpiFrame *frame);
 };
 
+VPIBackend gst_vpi_filter_get_backend (GstVpiFilter *self);
+
 G_END_DECLS
 
 #endif

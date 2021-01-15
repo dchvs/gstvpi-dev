@@ -118,6 +118,7 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
 {
   GstVpiVideoConvert *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  VPIStatus status = VPI_SUCCESS;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -129,6 +130,17 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
   self = GST_VPI_VIDEO_CONVERT (filter);
 
   GST_LOG_OBJECT (self, "Transform image");
+
+  status =
+      vpiSubmitConvertImageFormat (stream, VPI_BACKEND_CUDA, in_frame->image,
+      out_frame->image, VPI_CONVERSION_CLAMP, 1, 0);
+
+  if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Unable to perform format conversion."), ("%s",
+            vpiStatusGetName (status)));
+    ret = GST_FLOW_ERROR;
+  }
 
   return ret;
 }

@@ -435,6 +435,7 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   VPIWarpMap map = { 0 };
   guint width = 0;
   guint height = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);
@@ -497,7 +498,8 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
     goto out;
   }
 
-  status = vpiCreateRemap (VPI_BACKEND_CUDA, &map, &self->warp);
+  backend = gst_vpi_filter_get_backend (filter);
+  status = vpiCreateRemap (backend, &map, &self->warp);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

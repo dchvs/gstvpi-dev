@@ -258,7 +258,7 @@ static void
 gst_vpi_klt_tracker_validate_thresholds (GstVpiKltTracker * self)
 {
   GstVpiKltTrackerPrivate *priv = NULL;
-  
+
   g_return_if_fail (self);
 
   priv = G_TYPE_INSTANCE_GET_PRIVATE (self, GST_TYPE_VPI_KLT_TRACKER,
@@ -292,6 +292,7 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   guint width = 0;
   guint height = 0;
   GstVideoFormat format = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);
@@ -316,8 +317,9 @@ gst_vpi_klt_tracker_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   width = GST_VIDEO_INFO_WIDTH (in_info);
   height = GST_VIDEO_INFO_HEIGHT (in_info);
   format = GST_VIDEO_INFO_FORMAT (in_info);
+  backend = gst_vpi_filter_get_backend (filter);
 
-  status = vpiCreateKLTFeatureTracker (VPI_BACKEND_CUDA, width, height,
+  status = vpiCreateKLTFeatureTracker (backend, width, height,
       gst_vpi_video_to_image_format (format), &priv->klt);
 
   if (VPI_SUCCESS != status) {

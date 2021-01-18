@@ -259,6 +259,7 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   gint boundary_cond = 0;
   gdouble sigma_x = 0;
   gdouble sigma_y = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -279,7 +280,9 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   boundary_cond = self->boundary_cond;
   GST_OBJECT_UNLOCK (self);
 
-  status = vpiSubmitGaussianFilter (stream, VPI_BACKEND_CUDA, in_frame->image,
+  backend = gst_vpi_filter_get_backend (filter);
+
+  status = vpiSubmitGaussianFilter (stream, backend, in_frame->image,
       out_frame->image, size_x, size_y, sigma_x, sigma_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {

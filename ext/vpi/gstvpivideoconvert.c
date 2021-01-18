@@ -161,6 +161,7 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
   gint conversion_policy = -1;
   gfloat scale = 1;
   gfloat offset = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -179,8 +180,10 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
   offset = self->offset;
   GST_OBJECT_UNLOCK (self);
 
+  backend = gst_vpi_filter_get_backend (filter);
+
   status =
-      vpiSubmitConvertImageFormat (stream, VPI_BACKEND_CUDA, in_frame->image,
+      vpiSubmitConvertImageFormat (stream, backend, in_frame->image,
       out_frame->image, conversion_policy, scale, offset);
 
   if (VPI_SUCCESS != status) {

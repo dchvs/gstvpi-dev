@@ -435,7 +435,7 @@ gst_vpi_undistort_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   VPIWarpMap map = { 0 };
   guint width = 0;
   guint height = 0;
-  gint backend = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);

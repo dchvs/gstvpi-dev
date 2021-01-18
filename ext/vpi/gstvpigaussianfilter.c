@@ -259,7 +259,7 @@ gst_vpi_gaussian_filter_transform_image (GstVpiFilter * filter,
   gint boundary_cond = 0;
   gdouble sigma_x = 0;
   gdouble sigma_y = 0;
-  gint backend = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);

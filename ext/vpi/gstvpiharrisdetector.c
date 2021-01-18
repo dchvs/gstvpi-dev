@@ -197,7 +197,7 @@ gst_vpi_harris_detector_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   VPIStatus status = VPI_SUCCESS;
   guint width = 0;
   guint height = 0;
-  gint backend;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, FALSE);
   g_return_val_if_fail (in_info, FALSE);

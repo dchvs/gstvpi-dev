@@ -161,7 +161,7 @@ gst_vpi_video_convert_transform_image (GstVpiFilter * filter,
   gint conversion_policy = -1;
   gfloat scale = 1;
   gfloat offset = 0;
-  gint backend = 0;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);

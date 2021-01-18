@@ -103,8 +103,9 @@ gst_vpi_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
 {
   GstVpiMeta *self = (GstVpiMeta *) meta;
 
-  self->vpi_frame = (VpiFrame) {
-  0};
+  /* *INDENT-OFF* */
+  self->vpi_frame = (VpiFrame) { 0 };
+  /* *INDENT-ON* */
 
   return TRUE;
 }

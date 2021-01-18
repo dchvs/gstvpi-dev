@@ -23,26 +23,26 @@ eval_end (void)
   gboolean ret = FALSE;
 
   if (0 == num_buffers || MAX_BUFFERS < num_buffers) {
-    g_print ("                                     \n"
-        "                                     \n"
-        "*************************************\n"
-        "*** THIS IS AN EVALUATION VERSION ***\n"
-        "*************************************\n"
-        "                                     \n"
-        "        Thanks for evaluating        \n"
-        "          RidgeRun GstVPI            \n"
-        "                                     \n"
-        "  This version allows you to use     \n"
-        "  1800 buffers (30 seconds at 60fps).\n"
-        "  Please contact                     \n"
-        "  <support@ridgerun.com> to purchase \n"
-        "  the professional version of this   \n"
-        "  framework.                         \n"
-        "                                     \n"
-        "*************************************\n"
-        "*** THIS IS AN EVALUATION VERSION ***\n"
-        "*************************************\n"
-        "                                     \n");
+    g_print ("                                       \n"
+        "                                       \n"
+        "*************************************  \n"
+        "*** THIS IS AN EVALUATION VERSION ***  \n"
+        "*************************************  \n"
+        "                                       \n"
+        "        Thanks for evaluating          \n"
+        "          RidgeRun GstVPI              \n"
+        "                                       \n"
+        "  This version allows you to use       \n"
+        "  %d buffers.                          \n"
+        "  Please contact                       \n"
+        "  <support@ridgerun.com> to purchase   \n"
+        "  the professional version of this     \n"
+        "  framework.                           \n"
+        "                                       \n"
+        "*************************************  \n"
+        "*** THIS IS AN EVALUATION VERSION ***  \n"
+        "*************************************  \n"
+        "                                       \n", MAX_BUFFERS);
   }
 
   if (MAX_BUFFERS < num_buffers) {

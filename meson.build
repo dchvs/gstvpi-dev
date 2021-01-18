@@ -238,7 +238,7 @@ if get_option('eval').enabled()
           Building evaluation version
           ***************************''')
   cdata.set('EVAL', 1)
-  cdata.set('MAX_BUFFERS', 1800)
+  cdata.set('MAX_BUFFERS', get_option('eval-max-buffers'))
 endif
 
 # Imports pkgconfig module

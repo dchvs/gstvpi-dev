@@ -18,6 +18,7 @@
 
 #include <cuda_runtime.h>
 
+#include "eval.h"
 #include "gstcudameta.h"
 #include "gstvpibufferpool.h"
 
@@ -194,6 +195,22 @@ gst_vpi_filter_attach_mem_to_stream (GstVpiFilter * self, cudaStream_t stream,
   }
 }
 
+#ifdef EVAL
+static GstFlowReturn
+gst_vpi_filter_check_eval (GstVpiFilter * self)
+{
+  GstFlowReturn ret = GST_FLOW_OK;
+  g_return_val_if_fail (self, GST_FLOW_ERROR);
+
+  if (eval_end ()) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Evaluation version finished."), (NULL));
+    ret = GST_FLOW_EOS;
+  }
+  return ret;
+}
+#endif
+
 static GstFlowReturn
 gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     GstVideoFrame * inframe, GstVideoFrame * outframe)
@@ -260,6 +277,9 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
         ("Cannot process buffers that do not contain the VPI meta."), (NULL));
     ret = GST_FLOW_ERROR;
   }
+#ifdef EVAL
+  ret = gst_vpi_filter_check_eval (self);
+#endif
 
   return ret;
 }
@@ -319,6 +339,9 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
         ("Cannot process buffers that do not contain the VPI meta."), (NULL));
     ret = GST_FLOW_ERROR;
   }
+#ifdef EVAL
+  ret = gst_vpi_filter_check_eval (self);
+#endif
 
   return ret;
 }

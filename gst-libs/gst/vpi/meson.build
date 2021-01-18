@@ -19,6 +19,12 @@ gst_lib_headers = [
   'gstvpimeta.h'
 ]
 
+# Evaluation option
+if get_option('eval').enabled()
+  gst_lib_sources += ['eval.c']
+  gst_lib_headers += ['eval.h']
+endif
+
 # Build library
 gstvpifilter_lib = library('gstvpi-@0@'.format(api_version),
   gst_lib_sources,

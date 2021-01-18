@@ -231,6 +231,15 @@ if not get_option('doc').disabled()
   )
 endif
 
+# Evaluation version option
+if get_option('eval').enabled()
+  message('''
+          ***************************
+          Building evaluation version
+          ***************************''')
+  cdata.set('EVAL', 1)
+  cdata.set('MAX_BUFFERS', get_option('eval-max-buffers'))
+endif
 
 # Imports pkgconfig module
 pkgconfig = import('pkgconfig')

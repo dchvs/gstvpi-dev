@@ -44,6 +44,10 @@ static gboolean gst_vpi_filter_start (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_stop (GstBaseTransform * trans);
 static gboolean gst_vpi_filter_decide_allocation (GstBaseTransform * trans,
     GstQuery * query);
+static GstFlowReturn gst_vpi_filter_prepare_output_buffer (GstBaseTransform *
+    trans, GstBuffer * input, GstBuffer ** outbuf);
+static GstFlowReturn gst_vpi_filter_prepare_output_buffer_ip (GstBaseTransform *
+    trans, GstBuffer * input, GstBuffer ** outbuf);
 static void gst_vpi_filter_finalize (GObject * object);
 
 enum
@@ -75,6 +79,8 @@ gst_vpi_filter_class_init (GstVpiFilterClass * klass)
   base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_filter_stop);
   base_transform_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_vpi_filter_decide_allocation);
+  base_transform_class->prepare_output_buffer =
+      GST_DEBUG_FUNCPTR (gst_vpi_filter_prepare_output_buffer);
   gobject_class->finalize = gst_vpi_filter_finalize;
 }
 
@@ -222,8 +228,6 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
   GstVpiMeta *in_vpi_meta = NULL;
   GstVpiMeta *out_vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  GstMapInfo in_minfo = GST_MAP_INFO_INIT;
-  GstMapInfo out_minfo = GST_MAP_INFO_INIT;
 
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != inframe, GST_FLOW_ERROR);
@@ -246,13 +250,10 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
 
   if (in_vpi_meta && out_vpi_meta) {
 
-    gst_buffer_map (inframe->buffer, &in_minfo, GST_MAP_READ);
-    gst_buffer_map (outframe->buffer, &out_minfo, GST_MAP_READWRITE);
-
-    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream, in_minfo.data,
-        cudaMemAttachSingle);
     gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
-        out_minfo.data, cudaMemAttachSingle);
+        inframe->map->data, cudaMemAttachSingle);
+    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
+        outframe->map->data, cudaMemAttachSingle);
 
     ret = vpi_filter_class->transform_image (self, priv->vpi_stream,
         &in_vpi_meta->vpi_frame, &out_vpi_meta->vpi_frame);
@@ -260,13 +261,10 @@ gst_vpi_filter_transform_frame (GstVideoFilter * filter,
     vpiStreamSync (priv->vpi_stream);
 
     /* Attach memory to global stream to detach it from CUDA stream */
-    gst_vpi_filter_attach_mem_to_stream (self, NULL, in_minfo.data,
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, inframe->map->data,
         cudaMemAttachHost);
-    gst_vpi_filter_attach_mem_to_stream (self, NULL, out_minfo.data,
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, outframe->map->data,
         cudaMemAttachHost);
-
-    gst_buffer_unmap (inframe->buffer, &in_minfo);
-    gst_buffer_unmap (outframe->buffer, &out_minfo);
 
     if (GST_FLOW_OK != ret) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -294,7 +292,6 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
   GstVpiFilterPrivate *priv = NULL;
   GstVpiMeta *vpi_meta = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
-  GstMapInfo minfo = GST_MAP_INFO_INIT;
 
   g_return_val_if_fail (NULL != filter, GST_FLOW_ERROR);
   g_return_val_if_fail (NULL != frame, GST_FLOW_ERROR);
@@ -312,10 +309,8 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
           GST_VPI_META_API_TYPE));
 
   if (vpi_meta) {
-    gst_buffer_map (frame->buffer, &minfo, GST_MAP_READ);
-
-    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream, minfo.data,
-        cudaMemAttachSingle);
+    gst_vpi_filter_attach_mem_to_stream (self, priv->cuda_stream,
+        frame->map->data, cudaMemAttachSingle);
 
     ret = vpi_filter_class->transform_image_ip (self, priv->vpi_stream,
         &vpi_meta->vpi_frame);
@@ -323,10 +318,8 @@ gst_vpi_filter_transform_frame_ip (GstVideoFilter * filter,
     vpiStreamSync (priv->vpi_stream);
 
     /* Attach memory to global stream to detach it from CUDA stream */
-    gst_vpi_filter_attach_mem_to_stream (self, NULL, minfo.data,
+    gst_vpi_filter_attach_mem_to_stream (self, NULL, frame->map->data,
         cudaMemAttachHost);
-
-    gst_buffer_unmap (frame->buffer, &minfo);
 
     if (GST_FLOW_OK != ret) {
       GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -452,6 +445,44 @@ gst_vpi_filter_stop (GstBaseTransform * trans)
 
   cudaStreamDestroy (priv->cuda_stream);
   priv->cuda_stream = NULL;
+
+  return ret;
+}
+
+static GstFlowReturn
+gst_vpi_filter_prepare_output_buffer_ip (GstBaseTransform * trans,
+    GstBuffer * input, GstBuffer ** outbuf)
+{
+  g_return_val_if_fail (trans, GST_FLOW_ERROR);
+  g_return_val_if_fail (input, GST_FLOW_ERROR);
+  g_return_val_if_fail (outbuf, GST_FLOW_ERROR);
+
+  if (!gst_buffer_is_writable (input)) {
+    /* Create a subbuffer to allow subclasses to add metas. This wont
+       actually copy the data, just the GstBuffer skeleton */
+    *outbuf = gst_buffer_copy_region (input, GST_BUFFER_COPY_ALL, 0, -1);
+  } else {
+    *outbuf = input;
+  }
+
+  return GST_FLOW_OK;
+}
+
+static GstFlowReturn
+gst_vpi_filter_prepare_output_buffer (GstBaseTransform * trans,
+    GstBuffer * input, GstBuffer ** outbuf)
+{
+  GstVpiFilterClass *klass = GST_VPI_FILTER_GET_CLASS (trans);
+  GstFlowReturn ret = GST_FLOW_ERROR;
+
+  if (klass->transform_image_ip && gst_base_transform_is_passthrough (trans)) {
+    ret = gst_vpi_filter_prepare_output_buffer_ip (trans, input, outbuf);
+  } else {
+    ret =
+        GST_BASE_TRANSFORM_CLASS
+        (gst_vpi_filter_parent_class)->prepare_output_buffer (trans, input,
+        outbuf);
+  }
 
   return ret;
 }

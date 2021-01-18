@@ -38,6 +38,7 @@ gst_vpi_video_to_image_format (GstVideoFormat video_format)
       ret = VPI_IMAGE_FORMAT_RGB8;
       break;
     }
+    case GST_VIDEO_FORMAT_RGBx:
     case GST_VIDEO_FORMAT_RGBA:{
       ret = VPI_IMAGE_FORMAT_RGBA8;
       break;
@@ -46,6 +47,7 @@ gst_vpi_video_to_image_format (GstVideoFormat video_format)
       ret = VPI_IMAGE_FORMAT_BGR8;
       break;
     }
+    case GST_VIDEO_FORMAT_BGRx:
     case GST_VIDEO_FORMAT_BGRA:{
       ret = VPI_IMAGE_FORMAT_BGRA8;
       break;

@@ -8,6 +8,7 @@ gst_tests = [
   ['elements/vpiklttracker', false, [],  [] ],
   ['elements/vpiundistort', false, [],  [] ],
   ['elements/vpiupload', false, [],  [] ],
+  ['elements/vpivideoconvert', false, [],  [] ],
   ['libs/vpifilter', false, [],  [] ]
 ]
 

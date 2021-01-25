@@ -228,6 +228,11 @@ gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
   config = gst_buffer_pool_get_config (pool);
   gst_buffer_pool_config_set_params (config, caps, size, 0, 0);
 
+  if (gst_buffer_pool_is_active (pool)) {
+    GST_LOG_OBJECT (self, "Deactivating pool for setting config");
+    gst_buffer_pool_set_active (pool, FALSE);
+  }
+
   if (!gst_buffer_pool_set_config (pool, config)) {
     GST_ERROR_OBJECT (self, "Unable to set pool configuration");
     goto out;

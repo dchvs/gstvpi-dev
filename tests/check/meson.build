@@ -1,5 +1,3 @@
-valgrind_dep = dependency('valgrind', required: false).partial_dependency(compile_args : true)
-
 # Name, condition when to skip the test, extra dependencies and extra files
 gst_tests = [
   ['elements/vpidownload', false, [],  [] ],

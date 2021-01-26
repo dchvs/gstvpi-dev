@@ -84,8 +84,25 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
 {
   GstVpiBoxFilter *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
+  VPIStatus status = VPI_SUCCESS;
+
+  g_return_val_if_fail (filter, GST_FLOW_ERROR);
+  g_return_val_if_fail (stream, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame->image, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame->image, GST_FLOW_ERROR);
+
+  self = GST_VPI_BOX_FILTER (filter);
 
   GST_LOG_OBJECT (self, "Transform image");
+
+  status = vpiSubmitBoxFilter (stream, VPI_BACKEND_CUDA, in_frame->image,
+      out_frame->image, 5, 5, VPI_BOUNDARY_COND_ZERO);
+
+  if (VPI_SUCCESS != status) {
+    ret = GST_FLOW_ERROR;
+  }
 
   return ret;
 }

@@ -24,9 +24,22 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_box_filter_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_LE }")
 
+#define VPI_KERNEL_SIZE_ENUM (vpi_kernel_size_enum_get_type ())
+GType vpi_kernel_size_enum_get_type (void);
+
+#define KERNEL_SIZE_3 3
+#define KERNEL_SIZE_5 5
+#define KERNEL_SIZE_7 7
+#define KERNEL_SIZE_9 9
+#define KERNEL_SIZE_11 11
+
+#define DEFAULT_PROP_SIZE KERNEL_SIZE_5
+
 struct _GstVpiBoxFilter
 {
   GstVpiFilter parent;
+  guint size_x;
+  guint size_y;
 };
 
 /* prototypes */
@@ -40,7 +53,34 @@ static void gst_vpi_box_filter_get_property (GObject * object,
 enum
 {
   PROP_0,
+  PROP_SIZE_X,
+  PROP_SIZE_Y
 };
+
+GType
+vpi_kernel_size_enum_get_type (void)
+{
+  static GType vpi_kernel_size_enum_type = 0;
+  static const GEnumValue values[] = {
+    {KERNEL_SIZE_3, "Kernel size of 3",
+        "3"},
+    {KERNEL_SIZE_5, "Kernel size of 5",
+        "5"},
+    {KERNEL_SIZE_7, "Kernel size of 7",
+        "7"},
+    {KERNEL_SIZE_9, "Kernel size of 9",
+        "9"},
+    {KERNEL_SIZE_11, "Kernel size of 11",
+        "11"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_kernel_size_enum_type) {
+    vpi_kernel_size_enum_type =
+        g_enum_register_static ("VpiKernelSize", values);
+  }
+  return vpi_kernel_size_enum_type;
+}
 
 /* class initialization */
 
@@ -71,11 +111,25 @@ gst_vpi_box_filter_class_init (GstVpiBoxFilterClass * klass)
       GST_DEBUG_FUNCPTR (gst_vpi_box_filter_transform_image);
   gobject_class->set_property = gst_vpi_box_filter_set_property;
   gobject_class->get_property = gst_vpi_box_filter_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_SIZE_X,
+      g_param_spec_enum ("size-x", "Kernel size X",
+          "Box kernel size in X direction. ",
+          VPI_KERNEL_SIZE_ENUM, DEFAULT_PROP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SIZE_Y,
+      g_param_spec_enum ("size-y", "Kernel size Y",
+          "Box kernel size in Y direction. ",
+          VPI_KERNEL_SIZE_ENUM, DEFAULT_PROP_SIZE,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_box_filter_init (GstVpiBoxFilter * self)
 {
+  self->size_x = DEFAULT_PROP_SIZE;
+  self->size_y = DEFAULT_PROP_SIZE;
 }
 
 static GstFlowReturn
@@ -85,6 +139,7 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
   GstVpiBoxFilter *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  guint size_x, size_y = DEFAULT_PROP_SIZE;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -97,8 +152,13 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
 
   GST_LOG_OBJECT (self, "Transform image");
 
+  GST_OBJECT_LOCK (self);
+  size_x = self->size_x;
+  size_y = self->size_y;
+  GST_OBJECT_UNLOCK (self);
+
   status = vpiSubmitBoxFilter (stream, VPI_BACKEND_CUDA, in_frame->image,
-      out_frame->image, 5, 5, VPI_BOUNDARY_COND_ZERO);
+      out_frame->image, size_x, size_y, VPI_BOUNDARY_COND_ZERO);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -119,6 +179,12 @@ gst_vpi_box_filter_set_property (GObject * object, guint property_id,
   switch (property_id) {
     case PROP_0:
       break;
+    case PROP_SIZE_X:
+      self->size_x = g_value_get_enum (value);
+      break;
+    case PROP_SIZE_Y:
+      self->size_y = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -137,6 +203,12 @@ gst_vpi_box_filter_get_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_0:
+      break;
+    case PROP_SIZE_X:
+      g_value_set_enum (value, self->size_x);
+      break;
+    case PROP_SIZE_Y:
+      g_value_set_enum (value, self->size_y);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

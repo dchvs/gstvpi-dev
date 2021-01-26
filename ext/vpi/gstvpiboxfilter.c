@@ -19,6 +19,8 @@
 #include <gst/gst.h>
 #include <vpi/algo/BoxFilter.h>
 
+#include "gst-libs/gst/vpi/gstvpi.h"
+
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_box_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_box_filter_debug_category
 
@@ -34,12 +36,14 @@ GType vpi_kernel_size_enum_get_type (void);
 #define KERNEL_SIZE_11 11
 
 #define DEFAULT_PROP_SIZE KERNEL_SIZE_5
+#define DEFAULT_PROP_BOUNDARY_COND VPI_BOUNDARY_COND_ZERO
 
 struct _GstVpiBoxFilter
 {
   GstVpiFilter parent;
   guint size_x;
   guint size_y;
+  guint boundary_cond;
 };
 
 /* prototypes */
@@ -54,7 +58,8 @@ enum
 {
   PROP_0,
   PROP_SIZE_X,
-  PROP_SIZE_Y
+  PROP_SIZE_Y,
+  PROP_BOUNDARY_COND
 };
 
 GType
@@ -123,6 +128,12 @@ gst_vpi_box_filter_class_init (GstVpiBoxFilterClass * klass)
           "Box kernel size in Y direction. ",
           VPI_KERNEL_SIZE_ENUM, DEFAULT_PROP_SIZE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_BOUNDARY_COND,
+      g_param_spec_enum ("boundary", "Boundary condition",
+          "How pixel values outside of the image domain should be treated.",
+          VPI_BOUNDARY_CONDS_ENUM, DEFAULT_PROP_BOUNDARY_COND,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -130,6 +141,7 @@ gst_vpi_box_filter_init (GstVpiBoxFilter * self)
 {
   self->size_x = DEFAULT_PROP_SIZE;
   self->size_y = DEFAULT_PROP_SIZE;
+  self->boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
 }
 
 static GstFlowReturn
@@ -140,6 +152,7 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
   guint size_x, size_y = DEFAULT_PROP_SIZE;
+  guint boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -155,10 +168,11 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
   GST_OBJECT_LOCK (self);
   size_x = self->size_x;
   size_y = self->size_y;
+  boundary_cond = self->boundary_cond;
   GST_OBJECT_UNLOCK (self);
 
   status = vpiSubmitBoxFilter (stream, VPI_BACKEND_CUDA, in_frame->image,
-      out_frame->image, size_x, size_y, VPI_BOUNDARY_COND_ZERO);
+      out_frame->image, size_x, size_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -185,6 +199,9 @@ gst_vpi_box_filter_set_property (GObject * object, guint property_id,
     case PROP_SIZE_Y:
       self->size_y = g_value_get_enum (value);
       break;
+    case PROP_BOUNDARY_COND:
+      self->boundary_cond = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -209,6 +226,9 @@ gst_vpi_box_filter_get_property (GObject * object, guint property_id,
       break;
     case PROP_SIZE_Y:
       g_value_set_enum (value, self->size_y);
+      break;
+    case PROP_BOUNDARY_COND:
+      g_value_set_enum (value, self->boundary_cond);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

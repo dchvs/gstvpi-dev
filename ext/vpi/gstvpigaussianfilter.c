@@ -21,6 +21,8 @@
 
 #include <math.h>
 
+#include "gst-libs/gst/vpi/gstvpi.h"
+
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_gaussian_filter_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_gaussian_filter_debug_category
 
@@ -65,26 +67,6 @@ enum
   PROP_SIGMA_Y,
   PROP_BOUNDARY_COND
 };
-
-GType
-vpi_boundary_cond_enum_get_type (void)
-{
-  static GType vpi_boundary_cond_enum_type = 0;
-  static const GEnumValue values[] = {
-    {VPI_BOUNDARY_COND_ZERO, "All pixels outside the image are considered 0.",
-        "zero"},
-    {VPI_BOUNDARY_COND_CLAMP, "Border pixels are repeated indefinitely.",
-        "clamp"},
-    {0, NULL, NULL}
-  };
-
-  if (!vpi_boundary_cond_enum_type) {
-    vpi_boundary_cond_enum_type = g_enum_register_static ("VpiBoundCond",
-        values);
-  }
-
-  return vpi_boundary_cond_enum_type;
-}
 
 /* class initialization */
 

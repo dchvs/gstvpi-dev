@@ -21,9 +21,6 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (GstVpiGaussianFilter, gst_vpi_gaussian_filter, GST,
     VPI_GAUSSIAN_FILTER, GstVpiFilter)
 
-#define VPI_BOUNDARY_CONDS_ENUM (vpi_boundary_cond_enum_get_type ())
-    GType vpi_boundary_cond_enum_get_type (void);
-
 G_END_DECLS
 
 #endif

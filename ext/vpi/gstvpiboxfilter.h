@@ -10,16 +10,16 @@
  * back to RidgeRun without any encumbrance.
  */
 
-#ifndef _GST_VPI_GAUSSIAN_FILTER_H_
-#define _GST_VPI_GAUSSIAN_FILTER_H_
+#ifndef _GST_VPI_BOX_FILTER_H_
+#define _GST_VPI_BOX_FILTER_H_
 
 #include <gst-libs/gst/vpi/gstvpifilter.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_VPI_GAUSSIAN_FILTER (gst_vpi_gaussian_filter_get_type ())
-G_DECLARE_FINAL_TYPE (GstVpiGaussianFilter, gst_vpi_gaussian_filter, GST,
-    VPI_GAUSSIAN_FILTER, GstVpiFilter)
+#define GST_TYPE_VPI_BOX_FILTER (gst_vpi_box_filter_get_type ())
+G_DECLARE_FINAL_TYPE (GstVpiBoxFilter, gst_vpi_box_filter, GST,
+    VPI_BOX_FILTER, GstVpiFilter)
 
 G_END_DECLS
 

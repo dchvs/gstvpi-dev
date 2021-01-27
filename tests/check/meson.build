@@ -1,5 +1,6 @@
 # Name, condition when to skip the test, extra dependencies and extra files
 gst_tests = [
+  ['elements/vpiboxfilter', false, [],  [] ],
   ['elements/vpidownload', false, [],  [] ],
   ['elements/vpigaussianfilter', false, [],  [] ],
   ['elements/vpiharrisdetector', false, [],  [] ],

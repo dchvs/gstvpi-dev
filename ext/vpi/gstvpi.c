@@ -16,6 +16,7 @@
 
 #include <gst/gst.h>
 
+#include "gstvpiboxfilter.h"
 #include "gstvpidownload.h"
 #include "gstvpigaussianfilter.h"
 #include "gstvpiharrisdetector.h"
@@ -29,6 +30,12 @@ static gboolean
 vpi_init (GstPlugin * vpi)
 {
   gboolean ret = FALSE;
+
+  if (!gst_element_register (vpi, "vpiboxfilter", GST_RANK_NONE,
+          GST_TYPE_VPI_BOX_FILTER)) {
+    GST_ERROR ("Failed to register vpiboxfilter");
+    goto out;
+  }
 
   if (!gst_element_register (vpi, "vpidownload", GST_RANK_NONE,
           GST_TYPE_VPI_DOWNLOAD)) {

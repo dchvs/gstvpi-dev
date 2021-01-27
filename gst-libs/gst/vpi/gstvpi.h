@@ -22,6 +22,9 @@ VPIImageFormat gst_vpi_video_to_image_format (GstVideoFormat video_format);
 
 GstVideoFormat gst_vpi_image_to_video_format (VPIImageFormat image_format);
 
+#define VPI_BOUNDARY_CONDS_ENUM (vpi_boundary_cond_enum_get_type ())
+    GType vpi_boundary_cond_enum_get_type (void);
+
 G_END_DECLS
 
 #endif // __GST_VPI_H__

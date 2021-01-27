@@ -1,6 +1,7 @@
 # Define source code
 gst_plugin_sources = [
   'gstvpi.c',
+  'gstvpiboxfilter.c',
   'gstvpidownload.c',
   'gstvpigaussianfilter.c',
   'gstvpiharrisdetector.c',
@@ -12,6 +13,7 @@ gst_plugin_sources = [
 ]
 
 gst_plugin_headers = [
+  'gstvpiboxfilter.h',
   'gstvpidownload.h',
   'gstvpigaussianfilter.h',
   'gstvpiharrisdetector.h',

@@ -9,7 +9,8 @@ gst_plugin_sources = [
   'gstvpioverlay.c',
   'gstvpiundistort.c',
   'gstvpiupload.c',
-  'gstvpivideoconvert.c'
+  'gstvpivideoconvert.c',
+  'gstvpiwarp.c'
 ]
 
 gst_plugin_headers = [
@@ -21,7 +22,8 @@ gst_plugin_headers = [
   'gstvpioverlay.h',
   'gstvpiundistort.h',
   'gstvpiupload.h',
-  'gstvpivideoconvert.h'
+  'gstvpivideoconvert.h',
+  'gstvpiwarp.h'
 ]
 
 # Build plugin library

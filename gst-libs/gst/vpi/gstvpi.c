@@ -121,3 +121,25 @@ vpi_boundary_cond_enum_get_type (void)
 
   return vpi_boundary_cond_enum_type;
 }
+
+GType
+vpi_interpolator_enum_get_type (void)
+{
+  static GType vpi_interpolator_enum_type = 0;
+  static const GEnumValue values[] = {
+    {VPI_INTERP_NEAREST, "Nearest neighbor interpolation.",
+        "nearest"},
+    {VPI_INTERP_LINEAR, "Fast linear interpolation.",
+        "linear"},
+    {VPI_INTERP_CATMULL_ROM, "Fast Catmull-Rom cubic interpolation.",
+        "catmull"},
+    {0, NULL, NULL}
+  };
+
+  if (!vpi_interpolator_enum_type) {
+    vpi_interpolator_enum_type =
+        g_enum_register_static ("VpiInterpolator", values);
+  }
+
+  return vpi_interpolator_enum_type;
+}

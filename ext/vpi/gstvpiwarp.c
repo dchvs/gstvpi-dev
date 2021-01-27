@@ -27,11 +27,15 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_warp_debug_category);
 struct _GstVpiWarp
 {
   GstVpiFilter parent;
+  VPIPayload warp;
 };
 
 /* prototypes */
 static GstFlowReturn gst_vpi_warp_transform_image (GstVpiFilter *
     filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
+static gboolean gst_vpi_warp_start (GstVpiFilter * self, GstVideoInfo *
+    in_info, GstVideoInfo * out_info);
+static gboolean gst_vpi_warp_stop (GstBaseTransform * trans);
 static void gst_vpi_warp_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_warp_get_property (GObject * object,
@@ -53,6 +57,8 @@ static void
 gst_vpi_warp_class_init (GstVpiWarpClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  GstBaseTransformClass *base_transform_class =
+      GST_BASE_TRANSFORM_CLASS (klass);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_CLASS (klass);
 
   gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
@@ -69,6 +75,8 @@ gst_vpi_warp_class_init (GstVpiWarpClass * klass)
 
   vpi_filter_class->transform_image =
       GST_DEBUG_FUNCPTR (gst_vpi_warp_transform_image);
+  vpi_filter_class->start = GST_DEBUG_FUNCPTR (gst_vpi_warp_start);
+  base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_warp_stop);
   gobject_class->set_property = gst_vpi_warp_set_property;
   gobject_class->get_property = gst_vpi_warp_get_property;
 }
@@ -76,6 +84,37 @@ gst_vpi_warp_class_init (GstVpiWarpClass * klass)
 static void
 gst_vpi_warp_init (GstVpiWarp * self)
 {
+  self->warp = NULL;
+}
+
+static gboolean
+gst_vpi_warp_start (GstVpiFilter * filter, GstVideoInfo * in_info,
+    GstVideoInfo * out_info)
+{
+  GstVpiWarp *self = NULL;
+  gboolean ret = TRUE;
+  VPIStatus status = VPI_SUCCESS;
+  gint backend = VPI_BACKEND_INVALID;
+
+  g_return_val_if_fail (filter, FALSE);
+  g_return_val_if_fail (in_info, FALSE);
+  g_return_val_if_fail (out_info, FALSE);
+
+  self = GST_VPI_WARP (filter);
+
+  GST_DEBUG_OBJECT (self, "start");
+
+  backend = gst_vpi_filter_get_backend (filter);
+
+  status = vpiCreatePerspectiveWarp (backend, &self->warp);
+
+  if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not create perspective warp payload"),
+        ("%s", vpiStatusGetName (status)));
+    ret = FALSE;
+  }
+  return ret;
 }
 
 static GstFlowReturn
@@ -85,6 +124,10 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   GstVpiWarp *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  VPIPerspectiveTransform transform = { {0.5386, 0.1419, -74},
+  {-0.4399, 0.8662, 291.5},
+  {-0.0005, 0.0003, 1}
+  };
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -96,6 +139,10 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   self = GST_VPI_WARP (filter);
 
   GST_LOG_OBJECT (self, "Transform image");
+
+  status =
+      vpiSubmitPerspectiveWarp (stream, self->warp, in_frame->image, transform,
+      out_frame->image, VPI_INTERP_LINEAR, VPI_BOUNDARY_COND_ZERO, 0);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -140,4 +187,20 @@ gst_vpi_warp_get_property (GObject * object, guint property_id,
       break;
   }
   GST_OBJECT_UNLOCK (self);
+}
+
+static gboolean
+gst_vpi_warp_stop (GstBaseTransform * trans)
+{
+  GstVpiWarp *self = GST_VPI_WARP (trans);
+  gboolean ret = TRUE;
+
+  GST_BASE_TRANSFORM_CLASS (gst_vpi_warp_parent_class)->stop (trans);
+
+  GST_DEBUG_OBJECT (self, "stop");
+
+  vpiPayloadDestroy (self->warp);
+  self->warp = NULL;
+
+  return ret;
 }

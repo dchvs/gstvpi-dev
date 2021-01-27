@@ -153,6 +153,7 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
   VPIStatus status = VPI_SUCCESS;
   guint size_x, size_y = DEFAULT_PROP_SIZE;
   guint boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
+  gint backend = VPI_BACKEND_INVALID;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -171,7 +172,9 @@ gst_vpi_box_filter_transform_image (GstVpiFilter * filter,
   boundary_cond = self->boundary_cond;
   GST_OBJECT_UNLOCK (self);
 
-  status = vpiSubmitBoxFilter (stream, VPI_BACKEND_CUDA, in_frame->image,
+  backend = gst_vpi_filter_get_backend (filter);
+
+  status = vpiSubmitBoxFilter (stream, backend, in_frame->image,
       out_frame->image, size_x, size_y, boundary_cond);
 
   if (VPI_SUCCESS != status) {

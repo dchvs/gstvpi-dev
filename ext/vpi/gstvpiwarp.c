@@ -19,15 +19,20 @@
 #include <gst/gst.h>
 #include <vpi/algo/PerspectiveWarp.h>
 
+#include "gst-libs/gst/vpi/gstvpi.h"
+
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_warp_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_warp_debug_category
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_LE, RGB, BGR, RGBx, BGRx, NV12 }")
 
+#define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_LINEAR
+
 struct _GstVpiWarp
 {
   GstVpiFilter parent;
   VPIPayload warp;
+  gint interpolator;
 };
 
 /* prototypes */
@@ -43,7 +48,8 @@ static void gst_vpi_warp_get_property (GObject * object,
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_INTERPOLATOR,
 };
 
 /* class initialization */
@@ -79,12 +85,19 @@ gst_vpi_warp_class_init (GstVpiWarpClass * klass)
   base_transform_class->stop = GST_DEBUG_FUNCPTR (gst_vpi_warp_stop);
   gobject_class->set_property = gst_vpi_warp_set_property;
   gobject_class->get_property = gst_vpi_warp_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_INTERPOLATOR,
+      g_param_spec_enum ("interpolator", "Interpolation method",
+          "Interpolation method to be used.",
+          VPI_INTERPOLATORS_ENUM, DEFAULT_PROP_INTERPOLATOR,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_warp_init (GstVpiWarp * self)
 {
   self->warp = NULL;
+  self->interpolator = DEFAULT_PROP_INTERPOLATOR;
 }
 
 static gboolean
@@ -124,6 +137,7 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   GstVpiWarp *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  gint interpolator = DEFAULT_PROP_INTERPOLATOR;
   VPIPerspectiveTransform transform = { {0.5386, 0.1419, -74},
   {-0.4399, 0.8662, 291.5},
   {-0.0005, 0.0003, 1}
@@ -140,9 +154,13 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
 
   GST_LOG_OBJECT (self, "Transform image");
 
+  GST_OBJECT_LOCK (self);
+  interpolator = self->interpolator;
+  GST_OBJECT_UNLOCK (self);
+
   status =
       vpiSubmitPerspectiveWarp (stream, self->warp, in_frame->image, transform,
-      out_frame->image, VPI_INTERP_LINEAR, VPI_BOUNDARY_COND_ZERO, 0);
+      out_frame->image, interpolator, VPI_BOUNDARY_COND_ZERO, 0);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -163,6 +181,9 @@ gst_vpi_warp_set_property (GObject * object, guint property_id,
   switch (property_id) {
     case PROP_0:
       break;
+    case PROP_INTERPOLATOR:
+      self->interpolator = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -181,6 +202,9 @@ gst_vpi_warp_get_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_0:
+      break;
+    case PROP_INTERPOLATOR:
+      g_value_set_enum (value, self->interpolator);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

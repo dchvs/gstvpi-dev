@@ -30,14 +30,17 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_warp_debug_category);
 GType vpi_warp_flags_enum_get_type (void);
 
 #define VPI_WARP_NOT_INVERTED 0
+#define NUM_ROWS_COLS 3
 
 #define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_LINEAR
 #define DEFAULT_PROP_WARP_FLAG VPI_WARP_NOT_INVERTED
+#define DEFAULT_PROP_TRANSFORM { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} }
 
 struct _GstVpiWarp
 {
   GstVpiFilter parent;
   VPIPayload warp;
+  VPIPerspectiveTransform transform;
   gint interpolator;
   gint warp_flag;
 };
@@ -57,7 +60,8 @@ enum
 {
   PROP_0,
   PROP_INTERPOLATOR,
-  PROP_WARP_FLAG
+  PROP_WARP_FLAG,
+  PROP_TRANSFORM
 };
 
 GType
@@ -125,14 +129,31 @@ gst_vpi_warp_class_init (GstVpiWarpClass * klass)
           "Flag to modify algorithm behavior.",
           VPI_WARP_FLAGS_ENUM, DEFAULT_PROP_WARP_FLAG,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_TRANSFORM,
+      gst_param_spec_array ("transformation",
+          "Transformation to be applied",
+          "3x3 transformation matrix.\nIf not provided, no transformation "
+          "will be performed\n"
+          "Usage example: <<1.0,0.0,0.0>,<0.0,1.0,0.0>,<0.0,0.0,1.0>>",
+          gst_param_spec_array ("matrix-rows", "rows", "rows",
+              g_param_spec_double ("matrix-cols", "cols", "cols",
+                  -G_MAXDOUBLE, G_MAXDOUBLE, 0,
+                  (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_warp_init (GstVpiWarp * self)
 {
+  VPIPerspectiveTransform transform = DEFAULT_PROP_TRANSFORM;
+
   self->warp = NULL;
   self->interpolator = DEFAULT_PROP_INTERPOLATOR;
   self->warp_flag = DEFAULT_PROP_WARP_FLAG;
+
+  memcpy (&self->transform, &transform, sizeof (transform));
 }
 
 static gboolean
@@ -174,10 +195,6 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   VPIStatus status = VPI_SUCCESS;
   gint interpolator = DEFAULT_PROP_INTERPOLATOR;
   gint warp_flag = DEFAULT_PROP_WARP_FLAG;
-  VPIPerspectiveTransform transform = { {0.5386, 0.1419, -74},
-  {-0.4399, 0.8662, 291.5},
-  {-0.0005, 0.0003, 1}
-  };
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -196,14 +213,44 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   GST_OBJECT_UNLOCK (self);
 
   status =
-      vpiSubmitPerspectiveWarp (stream, self->warp, in_frame->image, transform,
-      out_frame->image, interpolator, VPI_BOUNDARY_COND_ZERO, warp_flag);
+      vpiSubmitPerspectiveWarp (stream, self->warp, in_frame->image,
+      self->transform, out_frame->image, interpolator, VPI_BOUNDARY_COND_ZERO,
+      warp_flag);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
   }
 
   return ret;
+}
+
+static void
+gst_vpi_warp_set_transformation_matrix (GstVpiWarp * self, const GValue * array)
+{
+  const GValue *row = NULL;
+  float value = 0;
+  guint rows, cols = 0;
+  guint i, j = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (array);
+
+  rows = gst_value_array_get_size (array);
+  cols = gst_value_array_get_size (gst_value_array_get_value (array, 0));
+
+  if (NUM_ROWS_COLS == rows && NUM_ROWS_COLS == cols) {
+
+    for (i = 0; i < rows; i++) {
+      row = gst_value_array_get_value (array, i);
+      for (j = 0; j < cols; j++) {
+        value = g_value_get_double (gst_value_array_get_value (row, j));
+        self->transform[i][j] = value;
+      }
+    }
+  } else {
+    GST_WARNING_OBJECT (self, "Matrix must be of 3x3. Received %dx%d. Not "
+        "changing transformation matrix", rows, cols);
+  }
 }
 
 void
@@ -224,11 +271,40 @@ gst_vpi_warp_set_property (GObject * object, guint property_id,
     case PROP_WARP_FLAG:
       self->warp_flag = g_value_get_enum (value);
       break;
+    case PROP_TRANSFORM:
+      gst_vpi_warp_set_transformation_matrix (self, value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
   GST_OBJECT_UNLOCK (self);
+}
+
+static void
+gst_vpi_warp_get_transformation_matrix (GstVpiWarp * self, GValue * array)
+{
+  GValue row = G_VALUE_INIT;
+  GValue value = G_VALUE_INIT;
+  guint i = 0;
+  guint j = 0;
+
+  g_return_if_fail (self);
+  g_return_if_fail (array);
+
+  for (i = 0; i < NUM_ROWS_COLS; i++) {
+    g_value_init (&row, GST_TYPE_ARRAY);
+
+    for (j = 0; j < NUM_ROWS_COLS; j++) {
+      g_value_init (&value, G_TYPE_DOUBLE);
+      g_value_set_double (&value, self->transform[i][j]);
+      gst_value_array_append_value (&row, &value);
+      g_value_unset (&value);
+    }
+
+    gst_value_array_append_value (array, &row);
+    g_value_unset (&row);
+  }
 }
 
 void
@@ -248,6 +324,9 @@ gst_vpi_warp_get_property (GObject * object, guint property_id,
       break;
     case PROP_WARP_FLAG:
       g_value_set_enum (value, self->warp_flag);
+      break;
+    case PROP_TRANSFORM:
+      gst_vpi_warp_get_transformation_matrix (self, value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

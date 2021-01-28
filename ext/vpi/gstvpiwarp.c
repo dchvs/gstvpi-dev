@@ -16,6 +16,7 @@
 
 #include "gstvpiwarp.h"
 
+#include <math.h>
 #include <gst/gst.h>
 #include <vpi/algo/PerspectiveWarp.h>
 
@@ -35,6 +36,7 @@ GType vpi_warp_flags_enum_get_type (void);
 #define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_LINEAR
 #define DEFAULT_PROP_WARP_FLAG VPI_WARP_NOT_INVERTED
 #define DEFAULT_PROP_TRANSFORM { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} }
+#define DEFAULT_PROP_DEMO FALSE
 
 struct _GstVpiWarp
 {
@@ -43,6 +45,10 @@ struct _GstVpiWarp
   VPIPerspectiveTransform transform;
   gint interpolator;
   gint warp_flag;
+  gboolean demo;
+  gint width;
+  gint height;
+  gint demo_angle;
 };
 
 /* prototypes */
@@ -61,7 +67,8 @@ enum
   PROP_0,
   PROP_INTERPOLATOR,
   PROP_WARP_FLAG,
-  PROP_TRANSFORM
+  PROP_TRANSFORM,
+  PROP_DEMO
 };
 
 GType
@@ -142,6 +149,14 @@ gst_vpi_warp_class_init (GstVpiWarpClass * klass)
                   (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
               (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)),
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_DEMO,
+      g_param_spec_boolean ("demo", "Demo Mode",
+          "Put the element in demo mode to showcase it's capabilities. In this "
+          "mode the incoming image will be rotated in the 3D space and projected "
+          "back to the image plane. Will override the transformation matrix.",
+          DEFAULT_PROP_DEMO,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
@@ -152,6 +167,10 @@ gst_vpi_warp_init (GstVpiWarp * self)
   self->warp = NULL;
   self->interpolator = DEFAULT_PROP_INTERPOLATOR;
   self->warp_flag = DEFAULT_PROP_WARP_FLAG;
+  self->demo = DEFAULT_PROP_DEMO;
+  self->width = 0;
+  self->height = 0;
+  self->demo_angle = 0;
 
   memcpy (&self->transform, &transform, sizeof (transform));
 }
@@ -173,6 +192,9 @@ gst_vpi_warp_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 
   GST_DEBUG_OBJECT (self, "start");
 
+  self->width = GST_VIDEO_INFO_WIDTH (in_info);
+  self->height = GST_VIDEO_INFO_HEIGHT (in_info);
+
   backend = gst_vpi_filter_get_backend (filter);
 
   status = vpiCreatePerspectiveWarp (backend, &self->warp);
@@ -186,6 +208,61 @@ gst_vpi_warp_start (GstVpiFilter * filter, GstVideoInfo * in_info,
   return ret;
 }
 
+static void
+gst_vpi_transformation_matrix_multiply (gfloat
+    result[NUM_ROWS_COLS][NUM_ROWS_COLS], VPIPerspectiveTransform a,
+    VPIPerspectiveTransform b)
+{
+  guint i, j, k = 0;
+
+  g_return_if_fail (result);
+  g_return_if_fail (a);
+  g_return_if_fail (b);
+
+  for (i = 0; i < NUM_ROWS_COLS; i++) {
+    for (j = 0; j < NUM_ROWS_COLS; j++) {
+      result[i][j] = 0;
+      for (k = 0; k < NUM_ROWS_COLS; k++) {
+        result[i][j] += a[i][k] * b[k][j];
+      }
+    }
+  }
+}
+
+static gdouble
+degrees_to_radians (gdouble degrees)
+{
+  return degrees * M_PI / 180;
+}
+
+static void
+gst_vpi_warp_demo (GstVpiWarp * self, gdouble angle, gint width, gint height)
+{
+  /* Transformation to move image center to origin of coordinate system */
+  VPIPerspectiveTransform t_to_origin =
+      { {1, 0, -width / 2.0f}, {0, 1, -height / 2.0f}, {0, 0, 1} };
+  /* Time dependent transformation taken from VPI sample */
+  gdouble t1 = sin (angle) * 0.0005f;
+  gdouble t2 = cos (angle) * 0.0005f;
+  VPIPerspectiveTransform t_time = { {0.66, 0, 0}, {0, 0.66, 0}, {t1, t2, 1} };
+  /* Transformation to move image back to where it was */
+  VPIPerspectiveTransform t_back =
+      { {1, 0, width / 2.0f}, {0, 1, height / 2.0f}, {0, 0, 1} };
+  /* Temporal result */
+  VPIPerspectiveTransform tmp = { 0 };
+
+  g_return_if_fail (self);
+
+  /* Apply transformations */
+  gst_vpi_transformation_matrix_multiply (tmp, t_time, t_to_origin);
+
+  GST_OBJECT_LOCK (self);
+  gst_vpi_transformation_matrix_multiply (self->transform, t_back, tmp);
+  GST_OBJECT_UNLOCK (self);
+
+  self->demo_angle = (self->demo_angle + 1) % 360;
+}
+
 static GstFlowReturn
 gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
     VpiFrame * in_frame, VpiFrame * out_frame)
@@ -193,8 +270,7 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   GstVpiWarp *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
-  gint interpolator = DEFAULT_PROP_INTERPOLATOR;
-  gint warp_flag = DEFAULT_PROP_WARP_FLAG;
+  gboolean demo = DEFAULT_PROP_DEMO;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -208,14 +284,20 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   GST_LOG_OBJECT (self, "Transform image");
 
   GST_OBJECT_LOCK (self);
-  interpolator = self->interpolator;
-  warp_flag = self->warp_flag;
+  demo = self->demo;
   GST_OBJECT_UNLOCK (self);
 
+  if (demo) {
+    gdouble angle = degrees_to_radians (self->demo_angle);
+    gst_vpi_warp_demo (self, angle, self->width, self->height);
+  }
+
+  GST_OBJECT_LOCK (self);
   status =
       vpiSubmitPerspectiveWarp (stream, self->warp, in_frame->image,
-      self->transform, out_frame->image, interpolator, VPI_BOUNDARY_COND_ZERO,
-      warp_flag);
+      self->transform, out_frame->image, self->interpolator,
+      VPI_BOUNDARY_COND_ZERO, self->warp_flag);
+  GST_OBJECT_UNLOCK (self);
 
   if (VPI_SUCCESS != status) {
     ret = GST_FLOW_ERROR;
@@ -274,6 +356,9 @@ gst_vpi_warp_set_property (GObject * object, guint property_id,
     case PROP_TRANSFORM:
       gst_vpi_warp_set_transformation_matrix (self, value);
       break;
+    case PROP_DEMO:
+      self->demo = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -327,6 +412,9 @@ gst_vpi_warp_get_property (GObject * object, guint property_id,
       break;
     case PROP_TRANSFORM:
       gst_vpi_warp_get_transformation_matrix (self, value);
+      break;
+    case PROP_DEMO:
+      g_value_set_boolean (value, self->demo);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

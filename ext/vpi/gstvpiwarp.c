@@ -27,14 +27,14 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_warp_debug_category);
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_LE, RGB, BGR, RGBx, BGRx, NV12 }")
 
-#define VPI_WARP_FLAGS_ENUM (vpi_warp_flags_enum_get_type ())
-GType vpi_warp_flags_enum_get_type (void);
+#define VPI_WARP_FLAGS (vpi_warp_flags_get_type ())
+GType vpi_warp_flags_get_type (void);
 
-#define VPI_WARP_NOT_INVERTED 0
+#define VPI_WARP_DIRECT 0
 #define NUM_ROWS_COLS 3
 
 #define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_LINEAR
-#define DEFAULT_PROP_WARP_FLAG VPI_WARP_NOT_INVERTED
+#define DEFAULT_PROP_WARP_FLAG VPI_WARP_DIRECT
 #define DEFAULT_PROP_TRANSFORM { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} }
 #define DEFAULT_PROP_DEMO FALSE
 
@@ -44,7 +44,7 @@ struct _GstVpiWarp
   VPIPayload warp;
   VPIPerspectiveTransform transform;
   gint interpolator;
-  gint warp_flag;
+  guint warp_flag;
   gboolean demo;
   gint width;
   gint height;
@@ -72,23 +72,25 @@ enum
 };
 
 GType
-vpi_warp_flags_enum_get_type (void)
+vpi_warp_flags_get_type (void)
 {
-  static GType vpi_warp_flags_enum_type = 0;
-  static const GEnumValue values[] = {
-    {VPI_WARP_NOT_INVERTED, "Transform is not inverted, algorithm inverts it",
-        "not-inverted"},
+  static GType vpi_warp_flags_type = 0;
+  static const GFlagsValue values[] = {
+    {VPI_WARP_DIRECT, "The provided transformation matrix is direct, so the "
+          "algorithm will invert it internally.",
+        "direct"},
     {VPI_WARP_INVERSE,
-          "Transform is already inverted, algorithm can use it directly",
+          "The provided transformation matrix is already inverted, so the "
+          "algorithm will not invert it.",
         "inverted"},
     {0, NULL, NULL}
   };
 
-  if (!vpi_warp_flags_enum_type) {
-    vpi_warp_flags_enum_type = g_enum_register_static ("VpiWarpFlags", values);
+  if (!vpi_warp_flags_type) {
+    vpi_warp_flags_type = g_flags_register_static ("VpiWarpFlags", values);
   }
 
-  return vpi_warp_flags_enum_type;
+  return vpi_warp_flags_type;
 }
 
 /* class initialization */
@@ -132,9 +134,9 @@ gst_vpi_warp_class_init (GstVpiWarpClass * klass)
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_WARP_FLAG,
-      g_param_spec_enum ("behavior-flag", "Algorithm behavior flag",
+      g_param_spec_flags ("behavior", "Algorithm behavior flag",
           "Flag to modify algorithm behavior.",
-          VPI_WARP_FLAGS_ENUM, DEFAULT_PROP_WARP_FLAG,
+          VPI_WARP_FLAGS, DEFAULT_PROP_WARP_FLAG,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   g_object_class_install_property (gobject_class, PROP_TRANSFORM,
@@ -351,7 +353,7 @@ gst_vpi_warp_set_property (GObject * object, guint property_id,
       self->interpolator = g_value_get_enum (value);
       break;
     case PROP_WARP_FLAG:
-      self->warp_flag = g_value_get_enum (value);
+      self->warp_flag = g_value_get_flags (value);
       break;
     case PROP_TRANSFORM:
       gst_vpi_warp_set_transformation_matrix (self, value);
@@ -408,7 +410,7 @@ gst_vpi_warp_get_property (GObject * object, guint property_id,
       g_value_set_enum (value, self->interpolator);
       break;
     case PROP_WARP_FLAG:
-      g_value_set_enum (value, self->warp_flag);
+      g_value_set_flags (value, self->warp_flag);
       break;
     case PROP_TRANSFORM:
       gst_vpi_warp_get_transformation_matrix (self, value);

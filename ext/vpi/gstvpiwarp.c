@@ -303,6 +303,9 @@ gst_vpi_warp_transform_image (GstVpiFilter * filter, VPIStream stream,
   GST_OBJECT_UNLOCK (self);
 
   if (VPI_SUCCESS != status) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("Could not apply the perspective warp."), ("%s",
+            vpiStatusGetName (status)));
     ret = GST_FLOW_ERROR;
   }
 

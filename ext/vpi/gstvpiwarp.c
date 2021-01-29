@@ -16,8 +16,8 @@
 
 #include "gstvpiwarp.h"
 
-#include <math.h>
 #include <gst/gst.h>
+#include <math.h>
 #include <vpi/algo/PerspectiveWarp.h>
 
 #include "gst-libs/gst/vpi/gstvpi.h"
@@ -211,11 +211,12 @@ gst_vpi_warp_start (GstVpiFilter * filter, GstVideoInfo * in_info,
 }
 
 static void
-gst_vpi_transformation_matrix_multiply (gfloat
-    result[NUM_ROWS_COLS][NUM_ROWS_COLS], VPIPerspectiveTransform a,
-    VPIPerspectiveTransform b)
+matrix_multiply (gfloat result[NUM_ROWS_COLS][NUM_ROWS_COLS],
+    VPIPerspectiveTransform a, VPIPerspectiveTransform b)
 {
-  guint i, j, k = 0;
+  guint i = 0;
+  guint j = 0;
+  guint k = 0;
 
   g_return_if_fail (result);
   g_return_if_fail (a);
@@ -256,10 +257,10 @@ gst_vpi_warp_demo (GstVpiWarp * self, gdouble angle, gint width, gint height)
   g_return_if_fail (self);
 
   /* Apply transformations */
-  gst_vpi_transformation_matrix_multiply (tmp, t_time, t_to_origin);
+  matrix_multiply (tmp, t_time, t_to_origin);
 
   GST_OBJECT_LOCK (self);
-  gst_vpi_transformation_matrix_multiply (self->transform, t_back, tmp);
+  matrix_multiply (self->transform, t_back, tmp);
   GST_OBJECT_UNLOCK (self);
 
   self->demo_angle = (self->demo_angle + 1) % 360;

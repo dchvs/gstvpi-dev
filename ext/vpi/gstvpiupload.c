@@ -27,6 +27,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define VPI_SUPPORTED_FORMATS "{ GRAY8, GRAY16_BE, GRAY16_LE, NV12, RGB, RGBA, RGBx, BGR, BGRA, BGRx }"
 #define VIDEO_CAPS GST_VIDEO_CAPS_MAKE(VPI_SUPPORTED_FORMATS)
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:VPIImage", VPI_SUPPORTED_FORMATS)
+#define VIDEO_AND_NVMM_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:NVMM", VPI_SUPPORTED_FORMATS)
 
 struct _GstVpiUpload
 {
@@ -34,9 +35,11 @@ struct _GstVpiUpload
   GstVideoInfo out_caps_info;
   GstVideoInfo in_caps_info;
   GstVpiBufferPool *upstream_buffer_pool;
+  gboolean is_nvmm;
 };
 
 /* prototypes */
+static gboolean gst_vpi_upload_is_nvmm (GstVpiUpload * self, GstCaps * caps);
 static GstCaps *gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static gboolean gst_vpi_upload_set_caps (GstBaseTransform * trans,
@@ -52,6 +55,24 @@ enum
   PROP_0
 };
 
+static gboolean
+gst_vpi_upload_is_nvmm (GstVpiUpload * self, GstCaps * caps)
+{
+  GstCapsFeatures *features = NULL;
+  gboolean is_nvmm = FALSE;
+  gint i = 0;
+
+  g_return_val_if_fail (self, FALSE);
+  g_return_val_if_fail (caps, FALSE);
+
+  for (i = 0; i < gst_caps_get_size (caps) && !is_nvmm; i++) {
+    features = gst_caps_get_features (caps, i);
+    is_nvmm = gst_caps_features_contains (features, "memory:NVMM");
+  }
+
+  return is_nvmm;
+}
+
 /* pad templates */
 static GstStaticPadTemplate
     gst_vpi_upload_src_template = GST_STATIC_PAD_TEMPLATE ("src",
@@ -64,7 +85,7 @@ static GstStaticPadTemplate
     gst_vpi_upload_sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (VIDEO_CAPS ";" VIDEO_AND_VPIIMAGE_CAPS)
+    GST_STATIC_CAPS (VIDEO_CAPS ";" VIDEO_AND_NVMM_CAPS)
     );
 
 /* class initialization */
@@ -130,15 +151,27 @@ gst_vpi_upload_transform_downstream_caps (GstVpiUpload * self,
 static GstCaps *
 gst_vpi_upload_transform_upstream_caps (GstVpiUpload * self, GstCaps * caps_src)
 {
+  GstCapsFeatures *nvmm_feature = NULL;
+  GstCaps *featured_caps = NULL;
   gint i = 0;
 
   g_return_val_if_fail (self, NULL);
   g_return_val_if_fail (caps_src, NULL);
 
-  /* All the result caps are Linux */
+  featured_caps = gst_caps_copy (caps_src);
+  nvmm_feature = gst_caps_features_from_string ("memory:NVMM");
+
+  /* All the result caps are Linux/NVMM */
   for (i = 0; i < gst_caps_get_size (caps_src); i++) {
+    /* Linux caps */
     gst_caps_set_features (caps_src, i, NULL);
+    /* NVMM caps */
+    gst_caps_set_features (featured_caps, i,
+        gst_caps_features_copy (nvmm_feature));
   }
+
+  caps_src = gst_caps_merge (featured_caps, caps_src);
+  gst_caps_features_free (nvmm_feature);
 
   return caps_src;
 }
@@ -194,6 +227,8 @@ gst_vpi_upload_set_caps (GstBaseTransform * trans, GstCaps * incaps,
     GST_ERROR_OBJECT (self, "Unable to get the input caps");
     goto out;
   }
+
+  self->is_nvmm = gst_vpi_upload_is_nvmm (self, incaps);
 
   ret = gst_video_info_from_caps (&self->out_caps_info, outcaps);
   if (!ret) {
@@ -272,6 +307,13 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstMeta *meta = NULL;
 
+  if (self->is_nvmm) {
+    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+        ("NVMM memory handling is not supported yet"), (NULL));
+    ret = GST_FLOW_ERROR;
+    goto out;
+  }
+
   meta = gst_buffer_get_meta (buf, GST_CUDA_META_API_TYPE);
   if (meta) {
     GST_LOG_OBJECT (self, "Received buffer through proposed allocation.");
@@ -281,6 +323,7 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
     ret = GST_FLOW_ERROR;
   }
 
+out:
   return ret;
 }
 

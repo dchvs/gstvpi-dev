@@ -10,24 +10,16 @@
  * back to RidgeRun without any encumbrance.
  */
 
-#ifndef __GST_VPI_H__
-#define __GST_VPI_H__
+#ifndef _GST_VPI_WARP_H_
+#define _GST_VPI_WARP_H_
 
-#include <gst/video/video.h>
-#include <vpi/Image.h>
+#include <gst-libs/gst/vpi/gstvpifilter.h>
 
 G_BEGIN_DECLS
 
-VPIImageFormat gst_vpi_video_to_image_format (GstVideoFormat video_format);
-
-GstVideoFormat gst_vpi_image_to_video_format (VPIImageFormat image_format);
-
-#define VPI_BOUNDARY_CONDS_ENUM (vpi_boundary_cond_enum_get_type ())
-    GType vpi_boundary_cond_enum_get_type (void);
-
-#define VPI_INTERPOLATORS_ENUM (vpi_interpolator_enum_get_type ())
-    GType vpi_interpolator_enum_get_type (void);
+#define GST_TYPE_VPI_WARP (gst_vpi_warp_get_type())
+G_DECLARE_FINAL_TYPE(GstVpiWarp, gst_vpi_warp, GST, VPI_WARP, GstVpiFilter)
 
 G_END_DECLS
 
-#endif // __GST_VPI_H__
+#endif

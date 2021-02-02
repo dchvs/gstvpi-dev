@@ -26,9 +26,6 @@ G_DECLARE_FINAL_TYPE(GstVpiUndistort, gst_vpi_undistort, GST, VPI_UNDISTORT, Gst
 #define VPI_FISHEYE_MAPPINGS_ENUM (vpi_fisheye_mapping_enum_get_type ())
     GType vpi_fisheye_mapping_enum_get_type (void);
 
-#define VPI_INTERPOLATORS_ENUM (vpi_interpolator_enum_get_type ())
-    GType vpi_interpolator_enum_get_type (void);
-
 G_END_DECLS
 
 #endif

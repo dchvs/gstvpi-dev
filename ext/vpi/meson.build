@@ -10,6 +10,7 @@ gst_plugin_sources = [
   'gstvpiundistort.c',
   'gstvpiupload.c',
   'gstvpivideoconvert.c',
+  'gstvpivideoscale.c',
   'gstvpiwarp.c'
 ]
 
@@ -23,6 +24,7 @@ gst_plugin_headers = [
   'gstvpiundistort.h',
   'gstvpiupload.h',
   'gstvpivideoconvert.h',
+  'gstvpivideoscale.h',
   'gstvpiwarp.h'
 ]
 

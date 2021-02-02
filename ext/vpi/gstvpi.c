@@ -25,6 +25,7 @@
 #include "gstvpiundistort.h"
 #include "gstvpiupload.h"
 #include "gstvpivideoconvert.h"
+#include "gstvpivideoscale.h"
 #include "gstvpiwarp.h"
 
 static gboolean
@@ -83,6 +84,12 @@ vpi_init (GstPlugin * vpi)
   if (!gst_element_register (vpi, "vpivideoconvert", GST_RANK_NONE,
           GST_TYPE_VPI_VIDEO_CONVERT)) {
     GST_ERROR ("Failed to register vpivideoconvert");
+    goto out;
+  }
+
+  if (!gst_element_register (vpi, "vpivideoscale", GST_RANK_NONE,
+          GST_TYPE_VPI_VIDEO_SCALE)) {
+    GST_ERROR ("Failed to register vpivideoscale");
     goto out;
   }
 

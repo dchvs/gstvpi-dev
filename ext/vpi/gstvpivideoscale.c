@@ -40,6 +40,8 @@ struct _GstVpiVideoScale
 /* prototypes */
 static GstFlowReturn gst_vpi_video_scale_transform_image (GstVpiFilter *
     filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
+static GstCaps *gst_vpi_video_scale_transform_caps (GstBaseTransform * trans,
+    GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static void gst_vpi_video_scale_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_vpi_video_scale_get_property (GObject * object,
@@ -63,6 +65,7 @@ static void
 gst_vpi_video_scale_class_init (GstVpiVideoScaleClass * klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  GstBaseTransformClass *bt_class = GST_BASE_TRANSFORM_CLASS (klass);
   GstVpiFilterClass *vpi_filter_class = GST_VPI_FILTER_CLASS (klass);
 
   gst_element_class_add_pad_template (GST_ELEMENT_CLASS (klass),
@@ -79,6 +82,8 @@ gst_vpi_video_scale_class_init (GstVpiVideoScaleClass * klass)
 
   vpi_filter_class->transform_image =
       GST_DEBUG_FUNCPTR (gst_vpi_video_scale_transform_image);
+  bt_class->transform_caps =
+      GST_DEBUG_FUNCPTR (gst_vpi_video_scale_transform_caps);
   gobject_class->set_property = gst_vpi_video_scale_set_property;
   gobject_class->get_property = gst_vpi_video_scale_get_property;
 
@@ -142,6 +147,44 @@ gst_vpi_video_scale_transform_image (GstVpiFilter * filter,
   }
 
   return ret;
+}
+
+static GstCaps *
+gst_vpi_video_scale_transform_caps (GstBaseTransform * trans,
+    GstPadDirection direction, GstCaps * caps, GstCaps * filter)
+{
+  GstCaps *othercaps = NULL;
+  gint i = 0;
+  const gchar *dir = direction == GST_PAD_SRC ? "src" : "sink";
+  const gchar *otherdir = direction == GST_PAD_SRC ? "sink" : "src";
+
+  GST_DEBUG_OBJECT (trans,
+      "Negotiating %s caps given the following %s caps: %" GST_PTR_FORMAT
+      " and filter: %" GST_PTR_FORMAT, otherdir, dir, caps, filter);
+
+  othercaps = gst_caps_copy (caps);
+
+  for (i = 0; i < gst_caps_get_size (othercaps); ++i) {
+    GstStructure *st = gst_caps_get_structure (othercaps, i);
+
+    /* Remove the width, height and pixel-aspect-ratio fields since they are
+       the only ones allowed to change.
+     */
+    gst_structure_remove_field (st, "width");
+    gst_structure_remove_field (st, "height");
+    gst_structure_remove_field (st, "pixel-aspect-ratio");
+  }
+
+  if (filter) {
+    GstCaps *tmp = othercaps;
+    othercaps = gst_caps_intersect (othercaps, filter);
+    gst_caps_unref (tmp);
+  }
+
+  GST_DEBUG_OBJECT (trans, "Transformed %s caps to: %" GST_PTR_FORMAT, otherdir,
+      othercaps);
+
+  return othercaps;
 }
 
 void

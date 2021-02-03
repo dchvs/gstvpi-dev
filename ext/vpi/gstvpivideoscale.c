@@ -19,14 +19,22 @@
 #include <gst/gst.h>
 #include <vpi/algo/Rescale.h>
 
+#include "gst-libs/gst/vpi/gstvpi.h"
+
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_video_scale_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_video_scale_debug_category
 
 #define VIDEO_AND_VPIIMAGE_CAPS GST_VIDEO_CAPS_MAKE_WITH_FEATURES ("memory:VPIImage", "{ GRAY8, GRAY16_LE, NV12, RGB, BGR, RGBA, BGRA, RGBx, BGRx }")
 
+#define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_LINEAR
+#define DEFAULT_PROP_BOUNDARY_COND VPI_BOUNDARY_COND_ZERO
+
 struct _GstVpiVideoScale
 {
   GstVpiFilter parent;
+
+  gint interpolator;
+  gint boundary_cond;
 };
 
 /* prototypes */
@@ -39,7 +47,9 @@ static void gst_vpi_video_scale_get_property (GObject * object,
 
 enum
 {
-  PROP_0
+  PROP_0,
+  PROP_INTERPOLATOR,
+  PROP_BOUNDARY_COND
 };
 
 /* class initialization */
@@ -71,11 +81,25 @@ gst_vpi_video_scale_class_init (GstVpiVideoScaleClass * klass)
       GST_DEBUG_FUNCPTR (gst_vpi_video_scale_transform_image);
   gobject_class->set_property = gst_vpi_video_scale_set_property;
   gobject_class->get_property = gst_vpi_video_scale_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_INTERPOLATOR,
+      g_param_spec_enum ("interpolator", "Interpolation method",
+          "Interpolation method to be used.",
+          VPI_INTERPOLATORS_ENUM, DEFAULT_PROP_INTERPOLATOR,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_BOUNDARY_COND,
+      g_param_spec_enum ("boundary", "Boundary condition",
+          "How pixel values outside of the image domain should be treated.",
+          VPI_BOUNDARY_CONDS_ENUM, DEFAULT_PROP_BOUNDARY_COND,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void
 gst_vpi_video_scale_init (GstVpiVideoScale * self)
 {
+  self->interpolator = DEFAULT_PROP_INTERPOLATOR;
+  self->boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
 }
 
 static GstFlowReturn
@@ -86,6 +110,8 @@ gst_vpi_video_scale_transform_image (GstVpiFilter * filter,
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
   gint backend = VPI_BACKEND_INVALID;
+  guint interpolator = DEFAULT_PROP_INTERPOLATOR;
+  guint boundary_cond = DEFAULT_PROP_BOUNDARY_COND;
 
   g_return_val_if_fail (filter, GST_FLOW_ERROR);
   g_return_val_if_fail (stream, GST_FLOW_ERROR);
@@ -100,9 +126,14 @@ gst_vpi_video_scale_transform_image (GstVpiFilter * filter,
 
   backend = gst_vpi_filter_get_backend (filter);
 
+  GST_OBJECT_LOCK (self);
+  interpolator = self->interpolator;
+  boundary_cond = self->boundary_cond;
+  GST_OBJECT_UNLOCK (self);
+
   status =
       vpiSubmitRescale (stream, backend, in_frame->image, out_frame->image,
-      VPI_INTERP_LINEAR, VPI_BOUNDARY_COND_ZERO);
+      interpolator, boundary_cond);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
@@ -125,6 +156,12 @@ gst_vpi_video_scale_set_property (GObject * object, guint property_id,
   switch (property_id) {
     case PROP_0:
       break;
+    case PROP_INTERPOLATOR:
+      self->interpolator = g_value_get_enum (value);
+      break;
+    case PROP_BOUNDARY_COND:
+      self->boundary_cond = g_value_get_enum (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
@@ -143,6 +180,12 @@ gst_vpi_video_scale_get_property (GObject * object, guint property_id,
   GST_OBJECT_LOCK (self);
   switch (property_id) {
     case PROP_0:
+      break;
+    case PROP_INTERPOLATOR:
+      g_value_set_enum (value, self->interpolator);
+      break;
+    case PROP_BOUNDARY_COND:
+      g_value_set_enum (value, self->boundary_cond);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

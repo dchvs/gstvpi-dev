@@ -85,6 +85,24 @@ gst_vpi_video_scale_transform_image (GstVpiFilter * filter,
   GstVpiVideoScale *self = NULL;
   GstFlowReturn ret = GST_FLOW_OK;
   VPIStatus status = VPI_SUCCESS;
+  gint backend = VPI_BACKEND_INVALID;
+
+  g_return_val_if_fail (filter, GST_FLOW_ERROR);
+  g_return_val_if_fail (stream, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (in_frame->image, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame, GST_FLOW_ERROR);
+  g_return_val_if_fail (out_frame->image, GST_FLOW_ERROR);
+
+  self = GST_VPI_VIDEO_SCALE (filter);
+
+  GST_LOG_OBJECT (self, "Transform image");
+
+  backend = gst_vpi_filter_get_backend (filter);
+
+  status =
+      vpiSubmitRescale (stream, backend, in_frame->image, out_frame->image,
+      VPI_INTERP_LINEAR, VPI_BOUNDARY_COND_ZERO);
 
   if (VPI_SUCCESS != status) {
     GST_ELEMENT_ERROR (self, LIBRARY, FAILED,

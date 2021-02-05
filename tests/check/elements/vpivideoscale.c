@@ -15,8 +15,8 @@
 #include "tests/check/test_utils.h"
 
 static const gchar *test_pipes[] = {
-  "videotestsrc ! video/x-raw,format=BGR ! vpiupload ! vpivideoconvert ! vpidownload ! video/x-raw,format=RGB ! fakesink",
-  "videotestsrc ! video/x-raw,format=BGR,width=320,height=240 ! vpiupload ! vpivideoconvert ! vpidownload ! video/x-raw,format=RGB,width=640,height=480 ! fakesink",
+  "videotestsrc ! video/x-raw,width=640,height=480 ! vpiupload ! vpivideoscale ! vpidownload ! video/x-raw,width=1920,height=1080 ! fakesink",
+  "videotestsrc ! video/x-raw,format=BGR,width=320,height=240 ! vpiupload ! vpivideoscale ! vpidownload ! video/x-raw,format=RGB,width=640,height=480 ! fakesink",
   NULL,
 };
 
@@ -24,7 +24,7 @@ enum
 {
   /* test names */
   TEST_PLAYING_TO_NULL_MULTIPLE_TIMES,
-  TEST_BLOCK_RESOLUTION_CHANGE,
+  TEST_BLOCK_FORMAT_CHANGE,
 };
 
 GST_START_TEST (test_playing_to_null_multiple_times)
@@ -43,7 +43,7 @@ GST_START_TEST (test_bypass_on_same_caps)
       "video/x-raw(memory:VPIImage),format=GRAY8,width=320,height=240,framerate=30/1";
   const gsize size = 320 * 240;
 
-  h = gst_harness_new ("vpivideoconvert");
+  h = gst_harness_new ("vpivideoscale");
 
   /* Define caps */
   gst_harness_set_src_caps_str (h, caps);
@@ -68,13 +68,12 @@ GST_START_TEST (test_bypass_on_same_caps)
 
 GST_END_TEST;
 
-GST_START_TEST (test_block_resolution_change)
+GST_START_TEST (test_block_format_change)
 {
   GstElement *pipeline = NULL;
   GError *error = NULL;
 
-  pipeline =
-      gst_parse_launch (test_pipes[TEST_BLOCK_RESOLUTION_CHANGE], &error);
+  pipeline = gst_parse_launch (test_pipes[TEST_BLOCK_FORMAT_CHANGE], &error);
 
   /* Check for errors creating pipeline */
   fail_if (error == NULL);
@@ -86,17 +85,17 @@ GST_START_TEST (test_block_resolution_change)
 GST_END_TEST;
 
 static Suite *
-gst_vpi_video_convert_suite (void)
+gst_vpi_video_scale_suite (void)
 {
-  Suite *suite = suite_create ("vpivideoconvert");
+  Suite *suite = suite_create ("vpivideoscale");
   TCase *tc = tcase_create ("general");
 
   suite_add_tcase (suite, tc);
   tcase_add_test (tc, test_playing_to_null_multiple_times);
   tcase_add_test (tc, test_bypass_on_same_caps);
-  tcase_add_test (tc, test_block_resolution_change);
+  tcase_add_test (tc, test_block_format_change);
 
   return suite;
 }
 
-GST_CHECK_MAIN (gst_vpi_video_convert);
+GST_CHECK_MAIN (gst_vpi_video_scale);

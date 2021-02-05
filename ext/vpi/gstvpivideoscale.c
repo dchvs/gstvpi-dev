@@ -29,6 +29,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_vpi_video_scale_debug_category);
 #define DEFAULT_PROP_INTERPOLATOR VPI_INTERP_LINEAR
 #define DEFAULT_PROP_BOUNDARY_COND VPI_BOUNDARY_COND_ZERO
 
+#define DEFAULT_WIDTH 1920
+#define DEFAULT_HEIGHT 1080
+
 struct _GstVpiVideoScale
 {
   GstVpiFilter parent;
@@ -40,6 +43,8 @@ struct _GstVpiVideoScale
 /* prototypes */
 static GstFlowReturn gst_vpi_video_scale_transform_image (GstVpiFilter *
     filter, VPIStream stream, VpiFrame * in_frame, VpiFrame * out_frame);
+static GstCaps *gst_vpi_video_scale_fixate_caps (GstBaseTransform * base,
+    GstPadDirection direction, GstCaps * caps, GstCaps * othercaps);
 static GstCaps *gst_vpi_video_scale_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static void gst_vpi_video_scale_set_property (GObject * object,
@@ -82,6 +87,7 @@ gst_vpi_video_scale_class_init (GstVpiVideoScaleClass * klass)
 
   vpi_filter_class->transform_image =
       GST_DEBUG_FUNCPTR (gst_vpi_video_scale_transform_image);
+  bt_class->fixate_caps = GST_DEBUG_FUNCPTR (gst_vpi_video_scale_fixate_caps);
   bt_class->transform_caps =
       GST_DEBUG_FUNCPTR (gst_vpi_video_scale_transform_caps);
   gobject_class->set_property = gst_vpi_video_scale_set_property;
@@ -98,6 +104,10 @@ gst_vpi_video_scale_class_init (GstVpiVideoScaleClass * klass)
           "How pixel values outside of the image domain should be treated.",
           VPI_BOUNDARY_CONDS_ENUM, DEFAULT_PROP_BOUNDARY_COND,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  /* Disable any sort of processing if input/output caps are equal */
+  bt_class->passthrough_on_same_caps = TRUE;
+  bt_class->transform_ip_on_passthrough = FALSE;
 }
 
 static void
@@ -150,6 +160,51 @@ gst_vpi_video_scale_transform_image (GstVpiFilter * filter,
 }
 
 static GstCaps *
+gst_vpi_video_scale_fixate_caps (GstBaseTransform * base,
+    GstPadDirection direction, GstCaps * caps, GstCaps * othercaps)
+{
+  GstStructure *caps_struct = NULL;
+  gint caps_w = 0, caps_h = 0;
+  GstStructure *othercaps_struct = NULL;
+  gint ref_w = 0, ref_h = 0;
+  gint set_w = 0, set_h = 0;
+  const gchar *dir = direction == GST_PAD_SRC ? "src" : "sink";
+  const gchar *otherdir = direction == GST_PAD_SRC ? "sink" : "src";
+
+  othercaps = gst_caps_truncate (othercaps);
+  othercaps = gst_caps_make_writable (othercaps);
+
+  GST_DEBUG_OBJECT (base, "trying to fixate %s othercaps %" GST_PTR_FORMAT
+      " based on %s caps %" GST_PTR_FORMAT, otherdir, othercaps, dir, caps);
+
+  caps_struct = gst_caps_get_structure (caps, 0);
+  othercaps_struct = gst_caps_get_structure (othercaps, 0);
+
+  gst_structure_get_int (caps_struct, "width", &caps_w);
+  gst_structure_get_int (caps_struct, "height", &caps_h);
+
+  /* We want the othercaps to mimic the received caps, however if the received
+     caps are not fixed either, then fixate to a default resolution */
+  ref_w = (caps_w != 0) ? caps_w : DEFAULT_WIDTH;
+  ref_h = (caps_h != 0) ? caps_h : DEFAULT_HEIGHT;
+
+  /* Fixate width */
+  gst_structure_fixate_field_nearest_int (othercaps_struct, "width", ref_w);
+  gst_structure_get_int (othercaps_struct, "width", &set_w);
+  GST_DEBUG_OBJECT (base, "Fixating width to %d", set_w);
+
+  /* Fixate height */
+  gst_structure_fixate_field_nearest_int (othercaps_struct, "height", ref_h);
+  gst_structure_get_int (othercaps_struct, "height", &set_h);
+  GST_DEBUG_OBJECT (base, "Fixating height to %d", set_h);
+
+  othercaps = gst_caps_fixate (othercaps);
+  GST_DEBUG_OBJECT (base, "Fixated othercaps to %" GST_PTR_FORMAT, othercaps);
+
+  return othercaps;
+}
+
+static GstCaps *
 gst_vpi_video_scale_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter)
 {
@@ -167,12 +222,11 @@ gst_vpi_video_scale_transform_caps (GstBaseTransform * trans,
   for (i = 0; i < gst_caps_get_size (othercaps); ++i) {
     GstStructure *st = gst_caps_get_structure (othercaps, i);
 
-    /* Remove the width, height and pixel-aspect-ratio fields since they are
+    /* Remove the width and height fields since they are
        the only ones allowed to change.
      */
     gst_structure_remove_field (st, "width");
     gst_structure_remove_field (st, "height");
-    gst_structure_remove_field (st, "pixel-aspect-ratio");
   }
 
   if (filter) {

@@ -27,15 +27,19 @@ gst_dep       = dependency('gstreamer-1.0',      version : gst_req)
 gst_base_dep  = dependency('gstreamer-base-1.0', version : gst_req)
 gst_check_dep = dependency('gstreamer-check-1.0',version : gst_req)
 gst_video_dep = dependency('gstreamer-video-1.0',version : gst_req)
-cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
+#cuda_dep = dependency('cuda', version : cuda_req, modules : ['cudart'])
+cuda_dep = dependency('cuda-10.2', version : cuda_req)
+cudart_dep = dependency('cudart-10.2', version : cuda_req)
+egl_dep = dependency('egl',)
 
 c = meson.get_compiler('c')
 vpi_dep = c.find_library('nvvpi', required:true)
 math_dep = c.find_library('m', required:true)
+nvbuf_dep = c.find_library('nvbuf_utils', dirs : '/usr/lib/aarch64-linux-gnu/tegra')
 
 ## Dependencies
 # Define plugin dependencies
-plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, vpi_dep, math_dep]
+plugin_deps = [gst_dep, gst_base_dep, gst_video_dep, cuda_dep, vpi_dep, math_dep, egl_dep, nvbuf_dep, cudart_dep]
 # Examples dependencies
 example_deps = [gst_dep, gst_base_dep]
 # Define test dependencies
@@ -58,12 +62,12 @@ endif
 # Define header directories
 gstvpiplugin_inc_dir = include_directories('gst-libs/')
 configinc = include_directories('.')
+nvidia_multimedia_api_inc_dir = include_directories('/usr/src/jetson_multimedia_api/include/')
 
 # Define compiler args and include directories
 c_args = ['-DHAVE_CONFIG_H']
 
 # Define installation directories
-
 lib_install_dir = get_option('libdir')
 plugins_install_dir = join_paths(lib_install_dir, 'gstreamer-1.0')
 pkgconfig_install_dir = join_paths(lib_install_dir, 'pkgconfig')

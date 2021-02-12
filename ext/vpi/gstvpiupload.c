@@ -16,10 +16,22 @@
 
 #include "gstvpiupload.h"
 
+#include "cuda.h"
+#include "cudaEGL.h"
+#include <cuda_runtime.h>
+#include "EGL/egl.h"
+#include "EGL/eglext.h"
 #include <gst/video/video.h>
+#include "nvbuf_utils.h"
+#include "gstcuda.h"
+#include <gst/gstbuffer.h>
 
 #include "gst-libs/gst/vpi/gstvpibufferpool.h"
 #include "gst-libs/gst/vpi/gstcudameta.h"
+
+#include <vpi/Image.h>
+#include "gst-libs/gst/vpi/gstvpimeta.h"
+#include <gst/video/video.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_vpi_upload_debug_category);
 #define GST_CAT_DEFAULT gst_vpi_upload_debug_category
@@ -36,6 +48,7 @@ struct _GstVpiUpload
   GstVideoInfo in_caps_info;
   GstVpiBufferPool *upstream_buffer_pool;
   gboolean is_nvmm;
+  EGLDisplay egl_display;
 };
 
 /* prototypes */
@@ -49,6 +62,20 @@ static gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
 static GstFlowReturn gst_vpi_upload_transform_ip (GstBaseTransform * trans,
     GstBuffer * buf);
 static void gst_vpi_upload_finalize (GObject * object);
+
+gboolean init_nvmm (GstVpiUpload * self);
+gboolean process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer);
+
+
+// 2 Delete
+//gboolean gst_cuda_init (void);
+static gboolean initialized = FALSE;
+static gboolean gst_cuda_format_from_egl (CUeglColorFormat eglfmt,
+    GstCudaFormat * fmt);
+void gst_vpi_image_free (gpointer data);
+VPIImageFormat gst_vpi_video_to_image_format (GstVideoFormat video_format);
+#define VPI_IMAGE_QUARK_STR "VPIImage"
+GQuark _vpi_image_quark;
 
 enum
 {
@@ -119,10 +146,71 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
   gobject_class->finalize = gst_vpi_upload_finalize;
 }
 
+
+
+// 2 Delete
+gboolean
+gst_cuda_init (void)
+{
+  CUresult status;
+  CUdevice cuda_device;
+  gint device_count;
+  const gchar *error;
+  gboolean ret = FALSE;
+
+  if (initialized) {
+    return TRUE;
+  }
+//  GST_DEBUG_CATEGORY_INIT (gst_cuda_debug_category, "cuda", 0,
+//      "debug category for cuda utils");
+
+  GST_INFO ("Initializing CUDA");
+
+  status = cuInit (0);
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Unable to initialize the CUDA driver API: %s", error);
+    goto out;
+  }
+
+  status = cuDeviceGetCount (&device_count);
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Unable to get the number of compute-capable devices: %s",
+        error);
+    goto out;
+  }
+
+  if (device_count == 0) {
+    GST_ERROR ("Did not find any compute-capable devices");
+    goto out;
+  }
+
+  status = cuDeviceGet (&cuda_device, 0);
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Unable to get a handle to a compute device: %s", error);
+    goto out;
+  }
+
+  initialized = TRUE;
+  ret = TRUE;
+
+out:
+  return ret;
+}
+
+
 static void
 gst_vpi_upload_init (GstVpiUpload * self)
 {
   self->upstream_buffer_pool = NULL;
+
+  if (!gst_cuda_init ()) {
+    GST_ERROR_OBJECT (self, "Unable to start CUDA subsystem");
+    return;
+  }
+  init_nvmm (self);
 }
 
 static GstCaps *
@@ -307,12 +395,21 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstMeta *meta = NULL;
 
+  g_return_val_if_fail (buf, FALSE);
+
   if (self->is_nvmm) {
-    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-        ("NVMM memory handling is not supported yet"), (NULL));
-    ret = GST_FLOW_ERROR;
-    goto out;
+    ret = process_nvmm (self, buf);
+    if (!ret) {
+      GST_ERROR_OBJECT (self, "Failed to process NVMMs");
+      return GST_FLOW_ERROR;
+    }
+//    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
+//        ("NVMM memory handling is not supported yet"), (NULL));
+//    ret = GST_FLOW_ERROR;
+//    goto out;
+    return GST_FLOW_OK;
   }
+
 
   meta = gst_buffer_get_meta (buf, GST_CUDA_META_API_TYPE);
   if (meta) {
@@ -323,7 +420,6 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
     ret = GST_FLOW_ERROR;
   }
 
-out:
   return ret;
 }
 
@@ -336,5 +432,278 @@ gst_vpi_upload_finalize (GObject * object)
 
   g_clear_object (&self->upstream_buffer_pool);
 
+  //Delete the EGL Display
+  if (self->egl_display && !eglTerminate (self->egl_display)) {
+    GST_ERROR ("Failed to terminate EGL display connection");
+  }
+
   G_OBJECT_CLASS (gst_vpi_upload_parent_class)->finalize (object);
+}
+
+gboolean
+init_nvmm (GstVpiUpload * self)
+{
+  gboolean status = TRUE;
+
+  self->egl_display = EGL_NO_DISPLAY;
+  self->egl_display = eglGetDisplay (EGL_DEFAULT_DISPLAY);
+  if (self->egl_display == EGL_NO_DISPLAY) {
+    GST_ERROR ("Failed to get the EGL display");
+    return FALSE;
+  }
+
+  /* Init the EGL display */
+  if (!eglInitialize (self->egl_display, NULL, NULL)) {
+    GST_ERROR ("Failed to initialize the EGL display");
+    return FALSE;
+  }
+
+  return status;
+}
+
+static gboolean
+gst_cuda_format_from_egl (CUeglColorFormat eglfmt, GstCudaFormat * fmt)
+{
+  gboolean ret;
+
+  g_return_val_if_fail (fmt, FALSE);
+
+  ret = TRUE;
+
+  switch (eglfmt) {
+    case CU_EGL_COLOR_FORMAT_YUV420_PLANAR:
+      *fmt = GST_CUDA_I420;
+      break;
+    case CU_EGL_COLOR_FORMAT_ABGR:
+      *fmt = GST_CUDA_RGBA;
+      break;
+    default:
+      ret = FALSE;
+      break;
+  }
+
+  return ret;
+}
+
+void
+gst_vpi_image_free (gpointer data)
+{
+  VPIImage image = (VPIImage) data;
+
+  GST_INFO ("Freeing VPI image %p", image);
+
+  vpiImageDestroy (image);
+}
+
+
+VPIImageFormat
+gst_vpi_video_to_image_format (GstVideoFormat video_format)
+{
+  VPIImageFormat ret;
+
+  switch (video_format) {
+    case GST_VIDEO_FORMAT_GRAY8:{
+      ret = VPI_IMAGE_FORMAT_U8;
+      break;
+    }
+    case GST_VIDEO_FORMAT_GRAY16_BE:{
+      ret = VPI_IMAGE_FORMAT_U16;
+      break;
+    }
+    case GST_VIDEO_FORMAT_GRAY16_LE:{
+      ret = VPI_IMAGE_FORMAT_U16;
+      break;
+    }
+    case GST_VIDEO_FORMAT_NV12:{
+      ret = VPI_IMAGE_FORMAT_NV12;
+      break;
+    }
+    case GST_VIDEO_FORMAT_RGB:{
+      ret = VPI_IMAGE_FORMAT_RGB8;
+      break;
+    }
+    case GST_VIDEO_FORMAT_RGBx:
+    case GST_VIDEO_FORMAT_RGBA:{
+      ret = VPI_IMAGE_FORMAT_RGBA8;
+      break;
+    }
+    case GST_VIDEO_FORMAT_BGR:{
+      ret = VPI_IMAGE_FORMAT_BGR8;
+      break;
+    }
+    case GST_VIDEO_FORMAT_BGRx:
+    case GST_VIDEO_FORMAT_BGRA:{
+      ret = VPI_IMAGE_FORMAT_BGRA8;
+      break;
+    }
+    default:{
+      ret = VPI_IMAGE_FORMAT_INVALID;
+    }
+  }
+
+  return ret;
+}
+
+gboolean
+process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
+{
+  GstMapInfo info = GST_MAP_INFO_INIT;
+  NvBufferParams params;
+  EGLImageKHR *egl_image = NULL;
+  CUgraphicsResource resource;
+  CUeglFrame egl_frame;
+  const gchar *error = NULL;
+  int status = 0;
+  int fd = -1;
+
+  GValue dummy = G_VALUE_INIT;
+
+  g_return_val_if_fail (self, FALSE);
+  g_return_val_if_fail (gst_buffer, FALSE);
+
+  status = gst_buffer_map (gst_buffer, &info, GST_MAP_READ);
+  if (status == FALSE) {
+    GST_ERROR ("Failed to map the gst buffer");
+    goto error;
+  }
+  /// NVMM from buffer
+
+  // Get fd from NVMM hardware buffer
+  status = ExtractFdFromNvBuffer ((void *) info.data, (int *) &fd);
+  if (status != 0) {
+    GST_ERROR ("Failed to extract the fd from NVMM hardware buffer");
+    goto error;
+  }
+
+  status = NvBufferGetParams (fd, &params);
+  if (status == 0) {
+    g_print ("fd: %d\n", params.dmabuf_fd);
+    g_print ("width[0]: %d\n", params.width[0]);
+  } else {
+    GST_ERROR ("Failed to get params from fd for NVMM");
+    goto error;
+  }
+  ///**///
+
+  /// EGL from fd
+
+  cudaFree (0);
+
+  // Create the image from buffer
+  egl_image = NvEGLImageFromFd (self->egl_display, fd);
+  if (!egl_image) {
+    GST_ERROR ("Failed to create EGL image from NVMM buffer");
+    goto error;
+  }
+  // Register image to the GPU
+  status = cuGraphicsEGLRegisterImage (&resource, egl_image,
+      CU_GRAPHICS_MAP_RESOURCE_FLAGS_NONE);
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Failed to register EGL image: %s. Status=>%d", error, status);
+    goto noregister;
+  }
+
+  status = cuGraphicsResourceGetMappedEglFrame (&egl_frame, resource, 0, 0);
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Failed to map EGL frame: %s", error);
+    goto nomap;
+  }
+
+  status = cuCtxSynchronize ();
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Failed to synchronize before processing: %s", error);
+    goto nomap;
+  }
+  ///**///
+
+  /// DATA
+  {
+    GstCudaChannel channels[GST_CUDA_MAX_CHANNELS];
+//  gint32 num_planes;
+    GstCudaFormat format;
+
+    gint32 max_planes;
+    gint plane;
+
+    g_return_val_if_fail (initialized, FALSE);
+    g_return_val_if_fail (gst_buffer, FALSE);
+//  g_return_if_fail (data);
+
+    max_planes = egl_frame.planeCount > GST_CUDA_MAX_CHANNELS ?
+        GST_CUDA_MAX_CHANNELS : egl_frame.planeCount;
+
+    for (plane = 0; plane < max_planes; ++plane) {
+      channels[plane].data = egl_frame.frame.pPitch[plane];
+      channels[plane].pitch = params.pitch[plane];
+      channels[plane].width = params.width[plane];
+      channels[plane].height = params.height[plane];
+    }
+
+//  num_planes = max_planes;
+
+    gst_cuda_format_from_egl (egl_frame.eglColorFormat, &format);
+
+    {
+      cudaStream_t stream;
+      cudaStreamCreate (&stream);
+      cudaStreamAttachMemAsync (stream, channels[0].data, 0,
+          cudaMemAttachSingle);
+      cudaStreamSynchronize (stream);
+
+      //  cuda_stream = (GstCudaStream *) & stream;
+      cudaStreamSynchronize (stream);
+      cudaStreamDestroy (stream);
+      g_value_init (&dummy, G_TYPE_POINTER);
+      //  g_closure_invoke (unmap, NULL, 1, &dummy, NULL);
+      g_value_unset (&dummy);
+      //  g_closure_unref (unmap);
+
+    }
+  }
+  ///**///
+
+  /// Free resources
+  status = cuGraphicsUnregisterResource (resource);
+  if (status != CUDA_SUCCESS) {
+    cuGetErrorString (status, &error);
+    GST_ERROR ("Failed to free CUDA resources: %s", error);
+  }
+
+  NvDestroyEGLImage (self->egl_display, &egl_image);
+  gst_buffer_unmap (gst_buffer, &info);
+  ///**///
+
+  return TRUE;
+
+noregister:
+  NvDestroyEGLImage (self->egl_display, egl_image);
+
+  goto error;
+
+nomap:
+  cuGraphicsUnregisterResource (resource);
+
+  goto error;
+
+error:
+  gst_buffer_unmap (gst_buffer, &info);
+
+  if (error) {
+    g_clear_pointer (&error, g_free);
+  }
+
+  NvDestroyEGLImage (self->egl_display, egl_image);
+
+  g_slice_free (GstMapInfo, &info);
+  g_clear_pointer (&self->egl_display, gst_buffer_unref);
+  g_clear_object (&self->egl_display);
+
+  if (gst_buffer) {
+    g_clear_pointer (&gst_buffer, gst_buffer_unref);
+  }
+
+  return FALSE;
 }

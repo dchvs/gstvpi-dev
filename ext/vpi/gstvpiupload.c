@@ -70,7 +70,7 @@ gboolean process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer);
 // 2 Delete
 //gboolean gst_cuda_init (void);
 static gboolean initialized = FALSE;
-static gboolean gst_cuda_format_from_egl (CUeglColorFormat eglfmt,
+gboolean gst_cuda_format_from_egl (CUeglColorFormat eglfmt,
     GstCudaFormat * fmt);
 void gst_vpi_image_free (gpointer data);
 VPIImageFormat gst_vpi_video_to_image_format (GstVideoFormat video_format);
@@ -461,7 +461,7 @@ init_nvmm (GstVpiUpload * self)
   return status;
 }
 
-static gboolean
+gboolean
 gst_cuda_format_from_egl (CUeglColorFormat eglfmt, GstCudaFormat * fmt)
 {
   gboolean ret;
@@ -555,10 +555,20 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   const gchar *error = NULL;
   int status = 0;
   int fd = -1;
-
   GValue dummy = G_VALUE_INIT;
 
+//  GstCudaChannel channels[GST_CUDA_MAX_CHANNELS];
+//  GstCudaFormat format;
+//  gint32 max_planes;
+  gint i;
+  VPIImageData vpi_image_data = { 0 };
+//  GstMeta meta;
+  VpiFrame vpi_frame;
+  GstMemory *mem = NULL;
+  cudaStream_t stream;
+
   g_return_val_if_fail (self, FALSE);
+  g_return_val_if_fail (initialized, FALSE);
   g_return_val_if_fail (gst_buffer, FALSE);
 
   status = gst_buffer_map (gst_buffer, &info, GST_MAP_READ);
@@ -620,49 +630,52 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   ///**///
 
   /// DATA
-  {
-    GstCudaChannel channels[GST_CUDA_MAX_CHANNELS];
-//  gint32 num_planes;
-    GstCudaFormat format;
+  vpi_image_data.type =
+      gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (&
+          (self->in_caps_info)));
+  vpi_image_data.numPlanes =
+      egl_frame.planeCount >
+      GST_CUDA_MAX_CHANNELS ? GST_CUDA_MAX_CHANNELS : egl_frame.planeCount;
 
-    gint32 max_planes;
-    gint plane;
-
-    g_return_val_if_fail (initialized, FALSE);
-    g_return_val_if_fail (gst_buffer, FALSE);
-//  g_return_if_fail (data);
-
-    max_planes = egl_frame.planeCount > GST_CUDA_MAX_CHANNELS ?
-        GST_CUDA_MAX_CHANNELS : egl_frame.planeCount;
-
-    for (plane = 0; plane < max_planes; ++plane) {
-      channels[plane].data = egl_frame.frame.pPitch[plane];
-      channels[plane].pitch = params.pitch[plane];
-      channels[plane].width = params.width[plane];
-      channels[plane].height = params.height[plane];
-    }
-
-//  num_planes = max_planes;
-
-    gst_cuda_format_from_egl (egl_frame.eglColorFormat, &format);
-
-    {
-      cudaStream_t stream;
-      cudaStreamCreate (&stream);
-      cudaStreamAttachMemAsync (stream, channels[0].data, 0,
-          cudaMemAttachSingle);
-      cudaStreamSynchronize (stream);
-
-      //  cuda_stream = (GstCudaStream *) & stream;
-      cudaStreamSynchronize (stream);
-      cudaStreamDestroy (stream);
-      g_value_init (&dummy, G_TYPE_POINTER);
-      //  g_closure_invoke (unmap, NULL, 1, &dummy, NULL);
-      g_value_unset (&dummy);
-      //  g_closure_unref (unmap);
-
-    }
+  for (i = 0; i < vpi_image_data.numPlanes; ++i) {
+    vpi_image_data.planes[i].data = egl_frame.frame.pPitch[i];
+    vpi_image_data.planes[i].pitchBytes = params.pitch[i];
+    vpi_image_data.planes[i].width = params.width[i];
+    vpi_image_data.planes[i].height = params.height[i];
   }
+
+  status = vpiImageCreateCudaMemWrapper (&vpi_image_data, VPI_BACKEND_ALL,
+      &(vpi_frame.image));
+  if (VPI_SUCCESS != status) {
+    GST_ERROR ("Could not wrap buffer in VPIImage");
+  }
+
+  /* Associate the VPIImage to the memory, so it only gets destroyed
+     when the underlying memory is destroyed. This will allow us to
+     share images with different buffers that share the same memory,
+     without worrying of an early free.
+   */
+  mem = gst_buffer_get_all_memory (gst_buffer);
+  gst_mini_object_set_qdata (GST_MINI_OBJECT_CAST (mem), _vpi_image_quark,
+      vpi_frame.image, gst_vpi_image_free);
+  gst_memory_unref (mem);
+
+//  gst_cuda_format_from_egl (egl_frame.eglColorFormat, &format);
+
+  cudaStreamCreate (&stream);
+  cudaStreamAttachMemAsync (stream,
+      vpi_image_data.planes[0].data /*channels[0].data */ , 0,
+      cudaMemAttachSingle);
+  cudaStreamSynchronize (stream);
+
+  //  cuda_stream = (GstCudaStream *) & stream;
+  cudaStreamSynchronize (stream);
+  cudaStreamDestroy (stream);
+  g_value_init (&dummy, G_TYPE_POINTER);
+  //  g_closure_invoke (unmap, NULL, 1, &dummy, NULL);
+  g_value_unset (&dummy);
+  //  g_closure_unref (unmap);
+
   ///**///
 
   /// Free resources
@@ -679,7 +692,7 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   return TRUE;
 
 noregister:
-  NvDestroyEGLImage (self->egl_display, egl_image);
+//  NvDestroyEGLImage (self->egl_display, egl_image);
 
   goto error;
 

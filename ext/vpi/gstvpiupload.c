@@ -544,6 +544,43 @@ gst_vpi_video_to_image_format (GstVideoFormat video_format)
   return ret;
 }
 
+//static void
+//map_pitch_linear (CUeglFrame *frame);
+//static void
+//map_pitch_linear (CUeglFrame *frame)
+//{
+//  guint8 *ptr = (guint8*)frame->frame.pPitch[0];
+//  pitch_kernel<<<1,1>>>(ptr);
+//}
+
+//__global__
+//void bl_kernel(cudaSurfaceObject_t surf) {
+//  unsigned char data;
+
+//  surf2Dread(&data, surf, 0, 0);
+
+//  printf ("===================\n");
+//  printf ("[Block Linear] Reading first pixel in the GPU: 0x%x\n", data);
+//  printf ("===================\n");
+//}
+void map_block_linear (CUeglFrame * frame);
+void
+map_block_linear (CUeglFrame * frame)
+{
+  struct cudaResourceDesc res;
+  cudaSurfaceObject_t surf = 0;
+
+  memset (&res, 0, sizeof (res));
+
+  res.resType = cudaResourceTypeArray;
+  res.res.array.array = (cudaArray_t) frame->frame.pArray[0];
+  cudaCreateSurfaceObject (&surf, &res);
+
+//  bl_kernel<<<1,1>>>(surf);
+
+  cudaDestroySurfaceObject (surf);
+}
+
 gboolean
 process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
 {
@@ -555,21 +592,35 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   const gchar *error = NULL;
   int status = 0;
   int fd = -1;
-  GValue dummy = G_VALUE_INIT;
 
-//  GstCudaChannel channels[GST_CUDA_MAX_CHANNELS];
-//  GstCudaFormat format;
-//  gint32 max_planes;
   gint i;
   VPIImageData vpi_image_data = { 0 };
-//  GstMeta meta;
-  VpiFrame vpi_frame;
+  GstVpiMeta *meta = NULL;
   GstMemory *mem = NULL;
-  cudaStream_t stream;
 
   g_return_val_if_fail (self, FALSE);
   g_return_val_if_fail (initialized, FALSE);
   g_return_val_if_fail (gst_buffer, FALSE);
+
+  mem =
+      gst_allocator_alloc (GST_ALLOCATOR (self->upstream_buffer_pool),
+      self->in_caps_info.size, NULL);
+  if (!mem) {
+    GST_ERROR_OBJECT (self, "Unable to allocate CUDA buffer");
+    return FALSE;
+  }
+
+  gst_buffer_append_memory (gst_buffer, mem);
+  if (self->is_nvmm) {
+    gst_buffer_add_video_meta_full (gst_buffer, GST_VIDEO_FRAME_FLAG_NONE,
+        GST_VIDEO_INFO_FORMAT (&(self->in_caps_info)),
+        GST_VIDEO_INFO_WIDTH (&(self->in_caps_info)),
+        GST_VIDEO_INFO_HEIGHT (&(self->in_caps_info)),
+        GST_VIDEO_INFO_N_PLANES (&(self->in_caps_info)),
+        self->in_caps_info.offset, self->in_caps_info.stride);
+  }
+  meta =
+      (GstVpiMeta *) gst_buffer_add_meta (gst_buffer, GST_VPI_META_INFO, NULL);
 
   status = gst_buffer_map (gst_buffer, &info, GST_MAP_READ);
   if (status == FALSE) {
@@ -589,6 +640,7 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   if (status == 0) {
     g_print ("fd: %d\n", params.dmabuf_fd);
     g_print ("width[0]: %d\n", params.width[0]);
+    g_print ("pitch[0]: %d\n", params.pitch[0]);
   } else {
     GST_ERROR ("Failed to get params from fd for NVMM");
     goto error;
@@ -630,8 +682,8 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   ///**///
 
   /// DATA
-  vpi_image_data.type =
-      gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (&
+  meta->vpi_frame.buffer = gst_buffer;
+  vpi_image_data.type = gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (&
           (self->in_caps_info)));
   vpi_image_data.numPlanes =
       egl_frame.planeCount >
@@ -642,12 +694,18 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
     vpi_image_data.planes[i].pitchBytes = params.pitch[i];
     vpi_image_data.planes[i].width = params.width[i];
     vpi_image_data.planes[i].height = params.height[i];
+
+    g_print (">>>>>> pitch => %d\n", vpi_image_data.planes[i].pitchBytes);
   }
 
   status = vpiImageCreateCudaMemWrapper (&vpi_image_data, VPI_BACKEND_ALL,
-      &(vpi_frame.image));
+      &(meta->vpi_frame.image));
   if (VPI_SUCCESS != status) {
     GST_ERROR ("Could not wrap buffer in VPIImage");
+    g_print (">>>>>> %d", status);
+//    return FALSE;
+  } else {
+    g_print (">>>>>> Wrap Cuda mem successfully");
   }
 
   /* Associate the VPIImage to the memory, so it only gets destroyed
@@ -657,24 +715,12 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
    */
   mem = gst_buffer_get_all_memory (gst_buffer);
   gst_mini_object_set_qdata (GST_MINI_OBJECT_CAST (mem), _vpi_image_quark,
-      vpi_frame.image, gst_vpi_image_free);
+      meta->vpi_frame.image, gst_vpi_image_free);
   gst_memory_unref (mem);
 
-//  gst_cuda_format_from_egl (egl_frame.eglColorFormat, &format);
-
-  cudaStreamCreate (&stream);
-  cudaStreamAttachMemAsync (stream,
-      vpi_image_data.planes[0].data /*channels[0].data */ , 0,
-      cudaMemAttachSingle);
-  cudaStreamSynchronize (stream);
-
-  //  cuda_stream = (GstCudaStream *) & stream;
-  cudaStreamSynchronize (stream);
-  cudaStreamDestroy (stream);
-  g_value_init (&dummy, G_TYPE_POINTER);
-  //  g_closure_invoke (unmap, NULL, 1, &dummy, NULL);
-  g_value_unset (&dummy);
-  //  g_closure_unref (unmap);
+  cudaDeviceSynchronize ();
+  status = cudaGetLastError ();
+  g_assert (status == cudaSuccess);
 
   ///**///
 

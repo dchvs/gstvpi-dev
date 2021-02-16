@@ -28,6 +28,7 @@
 
 #include "gst-libs/gst/vpi/gstvpibufferpool.h"
 #include "gst-libs/gst/vpi/gstcudameta.h"
+#include "gst-libs/gst/vpi/gstcudaallocator.h"
 
 #include <vpi/Image.h>
 #include "gst-libs/gst/vpi/gstvpimeta.h"
@@ -57,7 +58,7 @@ static GstCaps *gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static gboolean gst_vpi_upload_set_caps (GstBaseTransform * trans,
     GstCaps * incaps, GstCaps * outcaps);
-static gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
+/*static*/ gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
     GstQuery * decide_query, GstQuery * query);
 static GstFlowReturn gst_vpi_upload_transform_ip (GstBaseTransform * trans,
     GstBuffer * buf);
@@ -76,6 +77,8 @@ void gst_vpi_image_free (gpointer data);
 VPIImageFormat gst_vpi_video_to_image_format (GstVideoFormat video_format);
 #define VPI_IMAGE_QUARK_STR "VPIImage"
 GQuark _vpi_image_quark;
+/*static*/ GstFlowReturn gst_vpi_filter_prepare_output_buffer (GstBaseTransform
+    * trans, GstBuffer * input, GstBuffer ** outbuf);
 
 enum
 {
@@ -143,6 +146,8 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
       GST_DEBUG_FUNCPTR (gst_vpi_upload_propose_allocation);
   base_transform_class->transform_ip =
       GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_ip);
+//  base_transform_class->prepare_output_buffer =
+//      GST_DEBUG_FUNCPTR (gst_vpi_filter_prepare_output_buffer);
   gobject_class->finalize = gst_vpi_upload_finalize;
 }
 
@@ -206,11 +211,13 @@ gst_vpi_upload_init (GstVpiUpload * self)
 {
   self->upstream_buffer_pool = NULL;
 
+  gst_base_transform_set_in_place (GST_BASE_TRANSFORM (self), TRUE);
+
   if (!gst_cuda_init ()) {
     GST_ERROR_OBJECT (self, "Unable to start CUDA subsystem");
     return;
   }
-  init_nvmm (self);
+//  init_nvmm (self);
 }
 
 static GstCaps *
@@ -373,7 +380,7 @@ out:
 }
 
 /* propose allocation query parameters for input buffers */
-static gboolean
+/*static*/ gboolean
 gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
     GstQuery * decide_query, GstQuery * query)
 {
@@ -398,18 +405,18 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   g_return_val_if_fail (buf, FALSE);
 
   if (self->is_nvmm) {
+//      gst_base_transform_set_in_place (trans, FALSE);
+
+    gst_base_transform_set_passthrough (trans, FALSE);
+
     ret = process_nvmm (self, buf);
     if (!ret) {
       GST_ERROR_OBJECT (self, "Failed to process NVMMs");
       return GST_FLOW_ERROR;
     }
-//    GST_ELEMENT_ERROR (self, LIBRARY, FAILED,
-//        ("NVMM memory handling is not supported yet"), (NULL));
-//    ret = GST_FLOW_ERROR;
-//    goto out;
+
     return GST_FLOW_OK;
   }
-
 
   meta = gst_buffer_get_meta (buf, GST_CUDA_META_API_TYPE);
   if (meta) {
@@ -419,6 +426,32 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
         "Cannot process buffers that do not use the proposed allocation.");
     ret = GST_FLOW_ERROR;
   }
+
+  return ret;
+}
+
+/*static*/ GstFlowReturn
+gst_vpi_filter_prepare_output_buffer (GstBaseTransform * trans,
+    GstBuffer * input, GstBuffer ** outbuf)
+{
+//  GstVpiFilterClass *klass = GST_VPI_FILTER_GET_CLASS (trans);
+  GstFlowReturn ret = GST_FLOW_ERROR;
+
+//  if (klass->transform_image_ip && gst_base_transform_is_passthrough (trans)) {
+  if (!gst_buffer_is_writable (input)) {
+    /* Create a subbuffer to allow subclasses to add metas. This wont
+       actually copy the data, just the GstBuffer skeleton */
+    *outbuf = gst_buffer_copy_region (input, GST_BUFFER_COPY_ALL, 0, -1);
+  } else {
+    *outbuf = input;
+  }
+
+//  } else {
+//    ret =
+//        GST_BASE_TRANSFORM_CLASS
+//        (gst_vpi_filter_parent_class)->prepare_output_buffer (trans, input,
+//        outbuf);
+//  }
 
   return ret;
 }
@@ -490,7 +523,7 @@ gst_vpi_image_free (gpointer data)
 {
   VPIImage image = (VPIImage) data;
 
-  GST_INFO ("Freeing VPI image %p", image);
+  g_print ("Freeing VPI image %p\n", image);
 
   vpiImageDestroy (image);
 }
@@ -544,42 +577,25 @@ gst_vpi_video_to_image_format (GstVideoFormat video_format)
   return ret;
 }
 
-//static void
-//map_pitch_linear (CUeglFrame *frame);
-//static void
-//map_pitch_linear (CUeglFrame *frame)
-//{
-//  guint8 *ptr = (guint8*)frame->frame.pPitch[0];
-//  pitch_kernel<<<1,1>>>(ptr);
-//}
-
-//__global__
-//void bl_kernel(cudaSurfaceObject_t surf) {
-//  unsigned char data;
-
-//  surf2Dread(&data, surf, 0, 0);
-
-//  printf ("===================\n");
-//  printf ("[Block Linear] Reading first pixel in the GPU: 0x%x\n", data);
-//  printf ("===================\n");
-//}
-void map_block_linear (CUeglFrame * frame);
-void
-map_block_linear (CUeglFrame * frame)
+/*const GstMetaInfo *
+gst_vpi_meta_get_info (void)
 {
-  struct cudaResourceDesc res;
-  cudaSurfaceObject_t surf = 0;
+  static const GstMetaInfo *info = NULL;
 
-  memset (&res, 0, sizeof (res));
+  if (g_once_init_enter (&info)) {
+    const GstMetaInfo *meta = gst_meta_register (GST_VPI_META_API_TYPE,
+        "GstVpiMeta",
+        sizeof (GstVpiMeta),
+        gst_vpi_meta_init,
+        gst_vpi_meta_free,
+        gst_vpi_meta_transform);
 
-  res.resType = cudaResourceTypeArray;
-  res.res.array.array = (cudaArray_t) frame->frame.pArray[0];
-  cudaCreateSurfaceObject (&surf, &res);
+    _vpi_image_quark = g_quark_from_static_string (VPI_IMAGE_QUARK_STR);
 
-//  bl_kernel<<<1,1>>>(surf);
-
-  cudaDestroySurfaceObject (surf);
-}
+    g_once_init_leave (&info, meta);
+  }
+  return info;
+} */
 
 gboolean
 process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
@@ -602,25 +618,11 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   g_return_val_if_fail (initialized, FALSE);
   g_return_val_if_fail (gst_buffer, FALSE);
 
-  mem =
-      gst_allocator_alloc (GST_ALLOCATOR (self->upstream_buffer_pool),
-      self->in_caps_info.size, NULL);
-  if (!mem) {
-    GST_ERROR_OBJECT (self, "Unable to allocate CUDA buffer");
-    return FALSE;
-  }
+  cudaFree (0);
 
-  gst_buffer_append_memory (gst_buffer, mem);
-  if (self->is_nvmm) {
-    gst_buffer_add_video_meta_full (gst_buffer, GST_VIDEO_FRAME_FLAG_NONE,
-        GST_VIDEO_INFO_FORMAT (&(self->in_caps_info)),
-        GST_VIDEO_INFO_WIDTH (&(self->in_caps_info)),
-        GST_VIDEO_INFO_HEIGHT (&(self->in_caps_info)),
-        GST_VIDEO_INFO_N_PLANES (&(self->in_caps_info)),
-        self->in_caps_info.offset, self->in_caps_info.stride);
-  }
   meta =
       (GstVpiMeta *) gst_buffer_add_meta (gst_buffer, GST_VPI_META_INFO, NULL);
+  meta->vpi_frame.buffer = gst_buffer;
 
   status = gst_buffer_map (gst_buffer, &info, GST_MAP_READ);
   if (status == FALSE) {
@@ -628,6 +630,11 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
     goto error;
   }
   /// NVMM from buffer
+
+  cudaDeviceSynchronize ();
+  status = cudaGetLastError ();
+  g_assert (status == cudaSuccess);
+  _vpi_image_quark = g_quark_from_static_string (VPI_IMAGE_QUARK_STR);
 
   // Get fd from NVMM hardware buffer
   status = ExtractFdFromNvBuffer ((void *) info.data, (int *) &fd);
@@ -649,14 +656,15 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
 
   /// EGL from fd
 
-  cudaFree (0);
-
   // Create the image from buffer
-  egl_image = NvEGLImageFromFd (self->egl_display, fd);
+  egl_image = NvEGLImageFromFd (NULL, fd);
   if (!egl_image) {
     GST_ERROR ("Failed to create EGL image from NVMM buffer");
     goto error;
   }
+
+  g_print (">>>>>> egl_image %p ", egl_image);
+
   // Register image to the GPU
   status = cuGraphicsEGLRegisterImage (&resource, egl_image,
       CU_GRAPHICS_MAP_RESOURCE_FLAGS_NONE);
@@ -682,7 +690,7 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   ///**///
 
   /// DATA
-  meta->vpi_frame.buffer = gst_buffer;
+
   vpi_image_data.type = gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (&
           (self->in_caps_info)));
   vpi_image_data.numPlanes =
@@ -731,14 +739,14 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
     GST_ERROR ("Failed to free CUDA resources: %s", error);
   }
 
-  NvDestroyEGLImage (self->egl_display, &egl_image);
+  NvDestroyEGLImage (NULL, egl_image);
   gst_buffer_unmap (gst_buffer, &info);
   ///**///
 
   return TRUE;
 
 noregister:
-//  NvDestroyEGLImage (self->egl_display, egl_image);
+//  NvDestroyEGLImage (NULL, egl_image);
 
   goto error;
 
@@ -748,17 +756,19 @@ nomap:
   goto error;
 
 error:
-  gst_buffer_unmap (gst_buffer, &info);
+  if (gst_buffer) {
+    gst_buffer_unmap (gst_buffer, &info);
+  }
 
   if (error) {
     g_clear_pointer (&error, g_free);
   }
 
-  NvDestroyEGLImage (self->egl_display, egl_image);
+  NvDestroyEGLImage (NULL, egl_image);
 
   g_slice_free (GstMapInfo, &info);
-  g_clear_pointer (&self->egl_display, gst_buffer_unref);
-  g_clear_object (&self->egl_display);
+//  g_clear_pointer (&self->egl_display, gst_buffer_unref);
+//  g_clear_object (&self->egl_display);
 
   if (gst_buffer) {
     g_clear_pointer (&gst_buffer, gst_buffer_unref);

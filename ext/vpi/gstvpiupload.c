@@ -58,7 +58,7 @@ static GstCaps *gst_vpi_upload_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static gboolean gst_vpi_upload_set_caps (GstBaseTransform * trans,
     GstCaps * incaps, GstCaps * outcaps);
-/*static*/ gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
+static gboolean gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
     GstQuery * decide_query, GstQuery * query);
 static GstFlowReturn gst_vpi_upload_transform_ip (GstBaseTransform * trans,
     GstBuffer * buf);
@@ -146,6 +146,7 @@ gst_vpi_upload_class_init (GstVpiUploadClass * klass)
       GST_DEBUG_FUNCPTR (gst_vpi_upload_propose_allocation);
   base_transform_class->transform_ip =
       GST_DEBUG_FUNCPTR (gst_vpi_upload_transform_ip);
+
 //  base_transform_class->prepare_output_buffer =
 //      GST_DEBUG_FUNCPTR (gst_vpi_filter_prepare_output_buffer);
   gobject_class->finalize = gst_vpi_upload_finalize;
@@ -348,7 +349,7 @@ gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
   gboolean need_pool = FALSE;
   gboolean ret = FALSE;
 
-  GST_INFO_OBJECT (self, "Proposing VPI upstream_buffer_pool");
+  /*GST_INFO_OBJECT */ g_print ("Proposing VPI upstream_buffer_pool\n");
 
   gst_query_parse_allocation (query, &caps, &need_pool);
 
@@ -369,9 +370,10 @@ gst_vpi_upload_create_buffer_pool (GstVpiUpload * self,
   }
 
   gst_query_add_allocation_pool (query,
-      GST_BUFFER_POOL (buffer_pool), size, 2, 0);
+      GST_BUFFER_POOL (buffer_pool), size, 3, 0);
   gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
   gst_query_add_allocation_meta (query, GST_CUDA_META_API_TYPE, NULL);
+  gst_query_add_allocation_meta (query, GST_VPI_META_API_TYPE, NULL);
 
   ret = TRUE;
 
@@ -380,7 +382,7 @@ out:
 }
 
 /* propose allocation query parameters for input buffers */
-/*static*/ gboolean
+static gboolean
 gst_vpi_upload_propose_allocation (GstBaseTransform * trans,
     GstQuery * decide_query, GstQuery * query)
 {
@@ -407,7 +409,7 @@ gst_vpi_upload_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   if (self->is_nvmm) {
 //      gst_base_transform_set_in_place (trans, FALSE);
 
-    gst_base_transform_set_passthrough (trans, FALSE);
+    gst_base_transform_set_passthrough (trans, TRUE);
 
     ret = process_nvmm (self, buf);
     if (!ret) {
@@ -603,11 +605,12 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   GstMapInfo info = GST_MAP_INFO_INIT;
   NvBufferParams params;
   EGLImageKHR *egl_image = NULL;
-  CUgraphicsResource resource;
-  CUeglFrame egl_frame;
   const gchar *error = NULL;
   int status = 0;
   int fd = -1;
+
+  CUeglFrame egl_frame;
+  CUgraphicsResource resource;
 
   gint i;
   VPIImageData vpi_image_data = { 0 };
@@ -622,7 +625,7 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
 
   meta =
       (GstVpiMeta *) gst_buffer_add_meta (gst_buffer, GST_VPI_META_INFO, NULL);
-  meta->vpi_frame.buffer = gst_buffer;
+  meta->vpi_frame.buffer = gst_buffer_ref (gst_buffer);
 
   status = gst_buffer_map (gst_buffer, &info, GST_MAP_READ);
   if (status == FALSE) {
@@ -635,6 +638,13 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   status = cudaGetLastError ();
   g_assert (status == cudaSuccess);
   _vpi_image_quark = g_quark_from_static_string (VPI_IMAGE_QUARK_STR);
+
+//  status = cuCtxSynchronize ();
+//  if (status != CUDA_SUCCESS) {
+//    cuGetErrorString (status, &error);
+//    GST_ERROR ("Failed to synchronize before processing: %s", error);
+//    goto nomap;
+//  }
 
   // Get fd from NVMM hardware buffer
   status = ExtractFdFromNvBuffer ((void *) info.data, (int *) &fd);
@@ -655,16 +665,12 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   ///**///
 
   /// EGL from fd
-
   // Create the image from buffer
   egl_image = NvEGLImageFromFd (NULL, fd);
   if (!egl_image) {
     GST_ERROR ("Failed to create EGL image from NVMM buffer");
     goto error;
   }
-
-  g_print (">>>>>> egl_image %p ", egl_image);
-
   // Register image to the GPU
   status = cuGraphicsEGLRegisterImage (&resource, egl_image,
       CU_GRAPHICS_MAP_RESOURCE_FLAGS_NONE);
@@ -690,15 +696,14 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   ///**///
 
   /// DATA
-
   vpi_image_data.type = gst_vpi_video_to_image_format (GST_VIDEO_INFO_FORMAT (&
           (self->in_caps_info)));
-  vpi_image_data.numPlanes =
-      egl_frame.planeCount >
-      GST_CUDA_MAX_CHANNELS ? GST_CUDA_MAX_CHANNELS : egl_frame.planeCount;
+  vpi_image_data.numPlanes = GST_VIDEO_INFO_N_PLANES (&(self->in_caps_info));
+//      egl_frame.planeCount >
+//      GST_CUDA_MAX_CHANNELS ? GST_CUDA_MAX_CHANNELS : egl_frame.planeCount;
 
   for (i = 0; i < vpi_image_data.numPlanes; ++i) {
-    vpi_image_data.planes[i].data = egl_frame.frame.pPitch[i];
+    vpi_image_data.planes[i].data = egl_frame.frame.pPitch[i];  /*info.data + GST_VIDEO_INFO_PLANE_OFFSET (&(self->in_caps_info), i); */
     vpi_image_data.planes[i].pitchBytes = params.pitch[i];
     vpi_image_data.planes[i].width = params.width[i];
     vpi_image_data.planes[i].height = params.height[i];
@@ -716,11 +721,6 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
     g_print (">>>>>> Wrap Cuda mem successfully");
   }
 
-  /* Associate the VPIImage to the memory, so it only gets destroyed
-     when the underlying memory is destroyed. This will allow us to
-     share images with different buffers that share the same memory,
-     without worrying of an early free.
-   */
   mem = gst_buffer_get_all_memory (gst_buffer);
   gst_mini_object_set_qdata (GST_MINI_OBJECT_CAST (mem), _vpi_image_quark,
       meta->vpi_frame.image, gst_vpi_image_free);
@@ -729,7 +729,6 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   cudaDeviceSynchronize ();
   status = cudaGetLastError ();
   g_assert (status == cudaSuccess);
-
   ///**///
 
   /// Free resources
@@ -740,7 +739,7 @@ process_nvmm (GstVpiUpload * self, GstBuffer * gst_buffer)
   }
 
   NvDestroyEGLImage (NULL, egl_image);
-  gst_buffer_unmap (gst_buffer, &info);
+//  gst_buffer_unmap (gst_buffer, &info);
   ///**///
 
   return TRUE;
